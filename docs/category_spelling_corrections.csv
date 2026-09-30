@@ -1,0 +1,9 @@
+column,old_value,new_value,rows_changed
+legal_status_name,Paretnership,Partnership,16852
+sector,Toursim and Arts,Tourism and Arts,1023
+legal_status_name,share Company,Share Company,362
+Primary_Business_Type,Toursim and Arts,Tourism and Arts,259
+legal_status_name,Public EnterPrise,Public Enterprise,46
+legal_status_name,Non Public EnterPrise,Non Public Enterprise,19
+legal_status_name,Ordinary Paretnership,Ordinary Partnership,3
+legal_status_name,Limited Liabilty Paretnership,Limited Liability Partnership,1

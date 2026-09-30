@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ethiopia Business Landscape</title>
+    <meta
+      name="description"
+      content="An interactive portfolio visualization of Ethiopia business registry patterns by region, sector, and capital."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="intro">
+        <div>
+          <p class="eyebrow">Portfolio data visualization</p>
+          <h1>Ethiopia Business Landscape</h1>
+          <p class="lede">
+            An interactive explorer of formal business registrations by region,
+            sector, business type, and registered capital.
+          </p>
+        </div>
+        <div class="method-note">
+          <strong>Privacy-aware by design.</strong>
+          The site uses aggregated counts only and excludes names, addresses, and
+          phone numbers from the published data.
+        </div>
+      </section>
+
+      <section class="stats" aria-label="Dataset summary">
+        <article>
+          <span id="businessMetricLabel">Businesses in view</span>
+          <strong id="totalBusinesses">-</strong>
+        </article>
+        <article>
+          <span id="regionMetricLabel">Regions in view</span>
+          <strong id="regionCount">-</strong>
+        </article>
+        <article>
+          <span id="sectorMetricLabel">Sectors in view</span>
+          <strong id="sectorCount">-</strong>
+        </article>
+        <article>
+          <span id="capitalMetricLabel">Median capital in view</span>
+          <strong id="medianCapital">-</strong>
+        </article>
+      </section>
+
+      <section class="controls" id="filterBar" aria-label="Filter every chart on this page">
+        <div class="controls-inner">
+          <div class="controls-fields">
+            <label>
+              Region
+              <select id="regionSelect"></select>
+              <span class="control-hint">Filters every chart</span>
+            </label>
+            <label>
+              Sector
+              <select id="sectorSelect"></select>
+              <span class="control-hint">Filters where sector applies</span>
+            </label>
+            <button type="button" id="resetFilters" class="reset-btn" hidden>Clear filters</button>
+          </div>
+          <p class="controls-status" id="filterDescription" aria-live="polite">
+            Showing all 345,369 registered businesses.
+          </p>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="panel panel-wide">
+          <div class="panel-heading">
+            <div>
+              <h2>Where Businesses Are Registered</h2>
+              <p id="regionSubtitle">Every region in the registry, ranked by how many businesses are registered there.</p>
+              <p class="how-to-read">Bar length is a straight count. Watch the drop after the first two bars &mdash; Oromia and Addis Ababa hold two thirds of the registry between them, while Gambela has fewer than two hundred.</p>
+              <p class="scope-note" id="regionScope"></p>
+            </div>
+          </div>
+          <div id="regionChart" class="chart" role="img" aria-label="Businesses by region"></div>
+        </article>
+
+        <article class="panel panel-fill">
+          <h2>Sector Mix</h2>
+          <p id="sectorSubtitle">How registrations divide across the eight recorded sectors.</p>
+          <p class="how-to-read">Each slice is a share of the businesses currently in view. Trade and Service together account for roughly three quarters of everything registered.</p>
+          <p class="scope-note" id="sectorScope"></p>
+          <div id="sectorChart" class="chart" role="img" aria-label="Businesses by sector"></div>
+        </article>
+
+        <article class="panel">
+          <h2>Top Business Types</h2>
+          <p id="typeSubtitle">The most common kinds of business, one level below sector.</p>
+          <p class="how-to-read">This is the tier most people mean by &ldquo;what the business does&rdquo;. Change the region or sector above to see how the ranking shifts.</p>
+          <p class="scope-note" id="typeScope"></p>
+          <div id="typeChart" class="chart" role="img" aria-label="Top business types"></div>
+        </article>
+
+        <article class="panel panel-wide">
+          <div class="panel-heading split-heading">
+            <div>
+              <h2>Capital Concentration</h2>
+              <p id="capitalTreemapSubtitle">Where reported capital sits, rather than where businesses sit.</p>
+              <p class="how-to-read"><strong>How to read:</strong> each tile is one sector and business type; colour is the sector, and the label gives the exact figure. Tile <em>area</em> uses a compressed scale so small categories stay visible &mdash; compare the printed values, not the rectangles. Note how different this is from the count charts: Logistics is a modest share of businesses but the largest single pool of capital.</p>
+              <p class="scope-note" id="capitalScope"></p>
+            </div>
+          </div>
+          <div id="capitalTreemapChart" class="chart treemap-chart" role="img" aria-label="Treemap of sector and business type capital"></div>
+        </article>
+
+      </section>
+
+      <section class="grid">
+        <article class="panel panel-wide">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Legal structure</p>
+              <h2>A Nation Run by Individuals, Not Institutions</h2>
+              <p>Strip away the taxonomy and the geography, and the first thing the registry shows is who is actually doing business. Not corporations. Not cooperatives. People &mdash; filing under their own name, running an enterprise with no legal separation between themselves and the business.</p>
+            </div>
+          </div>
+          <div class="stats stats-inline" id="soleProprietorStats">
+            <article><span>Sole proprietorships (&ldquo;Private&rdquo;)</span><strong id="soleProprietorShare">&ndash;</strong></article>
+            <article><span>All formal corporate structures combined</span><strong id="formalShare">&ndash;</strong></article>
+          </div>
+          <p class="how-to-read" id="soleProprietorCallout"></p>
+
+          <h2 style="margin-top: 30px">Legal Structure of Formally-Registered Businesses</h2>
+          <p id="legalStructureSubtitle">Excludes sole proprietorships &mdash; this shows only the shape of the formal remainder.</p>
+          <div id="legalStructureChart" class="chart" role="img" aria-label="Legal structure of formally registered businesses, excluding sole proprietorships"></div>
+          <p class="how-to-read">Partnerships are the largest formal category by far &mdash; nearly double every other formal structure combined. Share companies, the vehicle of choice for large capital-raising ventures, account for barely half a percent of all businesses in the country.</p>
+        </article>
+
+        <article class="panel panel-wide">
+          <div class="panel-heading">
+            <div>
+              <h2>Who Owns These Businesses</h2>
+              <p>What legal form these businesses take &mdash; individuals, or institutions.</p>
+              <p class="how-to-read">Each bar is the share of that sector registered as a sole proprietorship; the pale track behind it is the remainder. The gradient is the point: formality rises steadily with capital intensity, from retail kiosks at the top to mining at the bottom. Hover for the full breakdown of legal forms.</p>
+              <p class="scope-note" id="formalityScope"></p>
+            </div>
+          </div>
+          <div id="formalityChart" class="chart" role="img" aria-label="Sole proprietor share by macro sector"></div>
+        </article>
+
+        <article class="panel panel-wide">
+          <div class="panel-heading">
+            <div>
+              <h2>The Formality Ladder</h2>
+              <p>How much capital each legal form actually registers.</p>
+              <p class="how-to-read"><strong>How to read:</strong> the dot is the median, the line spans the 25th to 75th percentile. The axis is <em>logarithmic</em> &mdash; each gridline is ten times the last &mdash; because the range runs from a few thousand birr to several million, which a normal axis would squash into one spike.</p>
+              <p class="scope-note" id="legalCapitalScope"></p>
+            </div>
+          </div>
+          <div id="legalCapitalChart" class="chart" role="img" aria-label="Median capital by legal form"></div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="panel panel-wide">
+          <div class="panel-heading split-heading">
+            <div>
+              <h2>Inside the Regions</h2>
+              <p id="zoneSubtitle">Geography below the regional headline: 134 zones and 1,161 woredas.</p>
+              <p class="how-to-read"><strong>Click any bar to go deeper</strong>, and use the trail on the right to come back up. Regional totals hide enormous variation &mdash; Oromia alone contains 47 zones.</p>
+              <p class="scope-note" id="zoneScope"></p>
+            </div>
+            <nav class="crumbs" id="zoneCrumbs" aria-label="Geography drilldown"></nav>
+          </div>
+          <div id="zoneChart" class="chart" role="img" aria-label="Businesses by zone and woreda"></div>
+        </article>
+
+        <article class="panel panel-wide">
+          <div class="panel-heading split-heading">
+            <div>
+              <h2>What Businesses Actually Do</h2>
+              <p id="specialtySubtitle">The complete classification, down to the most specific category recorded.</p>
+              <p class="how-to-read"><strong>Click any bar to go deeper:</strong> sector, then business type, then specialty. Construction, for instance, resolves into building, road, water and electrical contractors &mdash; detail the sector-level chart cannot show.</p>
+              <p class="scope-note" id="specialtyScope"></p>
+            </div>
+            <nav class="crumbs" id="specialtyCrumbs" aria-label="Taxonomy drilldown"></nav>
+          </div>
+          <div id="specialtyChart" class="chart" role="img" aria-label="Businesses by taxonomy tier"></div>
+        </article>
+      </section>
+
+      <section class="compare">
+        <div class="compare-heading">
+          <div>
+            <p class="eyebrow">Regional comparison</p>
+            <h2>Compare Two Regions</h2>
+            <p>A side-by-side view of any two regions, using shares rather than counts.</p>
+            <p class="how-to-read">Regions differ hugely in size, so raw counts would only ever show that Oromia is bigger. Percentages make structure comparable: whether a region leans toward trade, transport or services.</p>
+            <p class="scope-note scope-note-standalone">This section has its own selectors and is deliberately independent of the page filter.</p>
+          </div>
+          <div class="controls compare-controls" aria-label="Region comparison controls">
+            <label>
+              First region
+              <select id="compareRegionA"></select>
+            </label>
+            <label>
+              Second region
+              <select id="compareRegionB"></select>
+            </label>
+          </div>
+        </div>
+        <div class="comparison-stats" id="comparisonStats" aria-label="Comparison summary"></div>
+        <div id="comparisonTakeaway" class="comparison-takeaway" aria-live="polite"></div>
+        <div class="grid">
+          <article class="panel panel-wide">
+            <h2>Sector Share</h2>
+            <p>Stacked bars compare each sector as a share of the selected region's registrations.</p>
+            <div id="sectorShareChart" class="chart compact-chart" role="img" aria-label="Sector share comparison"></div>
+            <div id="sectorShareLegend" class="chart-legend" aria-label="Sector colors"></div>
+          </article>
+          <article class="panel panel-wide">
+            <h2>Business Type Share Comparison</h2>
+            <p>Paired bars show the actual share of each region's businesses in the selected category.</p>
+            <div id="typeDifferenceChart" class="chart" role="img" aria-label="Business type share comparison between selected regions"></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="synthesis">
+        <p class="eyebrow">Synthesis</p>
+        <h2>One Registry, Two Economies</h2>
+        <p>Put the three lenses together and the same shape appears from every angle. Ethiopia's registered economy in 2016 was overwhelmingly informal, overwhelmingly retail, and overwhelmingly concentrated in two regions &mdash; a vast field of small, individually-owned enterprises. Layered on top of that field sits a much smaller set of large, capital-intensive, often state-linked entities, visible mainly in the capital data, almost invisible in the count data.</p>
+        <div class="stats" id="synthesisStats">
+          <article><span>Registered businesses nationwide</span><strong id="synthTotal">&ndash;</strong></article>
+          <article><span>Filed as individual sole proprietorships</span><strong id="synthPrivateShare">&ndash;</strong></article>
+          <article><span id="synthTopRegionLabel">Based in the leading region alone</span><strong id="synthTopRegionShare">&ndash;</strong></article>
+          <article><span>Gap between mean and median declared capital</span><strong id="synthCapitalGap">&ndash;</strong></article>
+        </div>
+        <p>Neither picture is the whole truth on its own. The count data says this is a nation of kiosks and minibuses; the capital data says a handful of corporations hold most of the money. Both are true at once &mdash; and the gap between them is, arguably, the single most useful thing this registry has to say about how the Ethiopian economy actually works.</p>
+      </section>
+
+      <section class="takeaway">
+        <h2>What This Helps People Decide</h2>
+        <div class="takeaway-grid">
+          <p>
+            <strong>Policy makers</strong> can identify regions or sectors where
+            business support, infrastructure, or licensing services may be needed.
+          </p>
+          <p>
+            <strong>Investors and banks</strong> can compare market concentration
+            and discover clusters of demand by sector and region.
+          </p>
+          <p>
+            <strong>Entrepreneurs and the public</strong> can understand where
+            competition is dense and which business categories shape the formal economy.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <script src="d3.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

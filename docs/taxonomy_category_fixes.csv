@@ -1,0 +1,7 @@
+rows,old_macro_sector,old_primary_business_type,old_business_specialty,new_macro_sector,new_primary_business_type,new_business_specialty
+833,Retail,General Consumer Goods,Farming Supplies / Livestock,Retail,General Consumer Goods,Standard Retail
+242,Services,Tourism and Arts,Consulting / Support,Services,Tourism and Arts,Tour Operations
+210,Services,Logistics & Transportation,Consulting / Support,Services,Logistics & Transportation,Postal & Courier
+62,Manufacturing,Consumer Goods Manufacturing,Heavy Manufacturing,Manufacturing,Consumer Goods Manufacturing,Light Manufacturing
+16,Manufacturing,Food & Beverage Manufacturing,Heavy Manufacturing,Manufacturing,Food & Beverage Manufacturing,Food Processing
+1,Retail,General Consumer Goods,Building Materials,Retail,General Consumer Goods,Standard Retail

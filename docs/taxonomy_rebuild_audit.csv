@@ -1,0 +1,13 @@
+metric,value
+source,All business 2016 cleaned.xlsx
+records_written,345369
+classified_by_rule,345363
+unclassified,6
+spelling_corrections_applied,34905
+rules_learned,505
+rules_ambiguous,7
+rules_learned_from_rows,226452
+
+unseen_sub_group,rows
+(66214)Export of bee wax,5
+Manufacture of instruments and appliances for measuring and checking,1

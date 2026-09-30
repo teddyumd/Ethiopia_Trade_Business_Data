@@ -1,0 +1,20 @@
+# Local working files
+work/
+outputs/
+
+# Python/editor caches
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.vscode/
+.idea/
+
+# Large raw data files kept outside Git
+All Business 2016.csv
+All Business 2016.xlsx
+All business 2016 cleaned.xlsx
+All_business_2016_DeepTaxonomy.csv
+
+# Scratch files left by the correction scripts
+*.csv.tmp
+*.tmp.csv
