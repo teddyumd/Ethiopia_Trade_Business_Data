@@ -334,17 +334,27 @@ def main():
         rows.sort(key=lambda item: item["totalCapital"], reverse=True)
         region_capital_composition[region] = rows
 
+    # Disclosure control. A median computed over one business IS that business's
+    # registered capital, so publishing it discloses individual financial data
+    # through something labelled an aggregate. Five region-sector cells sat below
+    # this threshold, one of them a single business. Counts are kept - they say
+    # how many exist, not what any one of them is worth - but the capital
+    # statistics are withheld.
+    MIN_CELL = 5
+
     region_sector_capital = {}
     for region, sectors_for_region in capital_by_region_sector.items():
         region_sector_capital[region] = {}
         for sector, values in sectors_for_region.items():
             values.sort()
-            region_sector_capital[region][sector] = {
-                "count": len(values),
-                "median": pct(values, 0.5),
-                "p75": pct(values, 0.75),
-                "p90": pct(values, 0.9),
-            }
+            cell = {"count": len(values)}
+            if len(values) >= MIN_CELL:
+                cell["median"] = pct(values, 0.5)
+                cell["p75"] = pct(values, 0.75)
+                cell["p90"] = pct(values, 0.9)
+            else:
+                cell["suppressed"] = True
+            region_sector_capital[region][sector] = cell
 
     # Legal structure by macro sector, as counts plus the sole-proprietor share that
     # is the headline of the formality story.
@@ -442,6 +452,30 @@ def main():
     capital_by_legal_by_region = {r: legal_capital_rows(v, 5) for r, v in capital_by_legal_region.items()}
     specialty_by_region = {r: specialty_rows(v) for r, v in specialty_tree_region.items()}
 
+    # Share of businesses against share of capital, per sector. The two diverge
+    # sharply - logistics is a seventh of the register and well over half its
+    # capital - so the ratio between them is carried explicitly rather than left
+    # for the page to derive.
+    sector_capital_totals = {
+        row["sector"]: sum(t["totalCapital"] for t in row["businessTypes"])
+        for row in sector_capital_composition
+    }
+    grand_capital = sum(sector_capital_totals.values()) or 1
+    sector_counts = dict(sectors)
+    sector_capital_share = []
+    for sector, count in sorted(sector_counts.items(), key=lambda kv: -kv[1]):
+        cap = sector_capital_totals.get(sector, 0.0)
+        count_share = count / total if total else 0.0
+        capital_share = cap / grand_capital
+        sector_capital_share.append({
+            "sector": sector,
+            "count": count,
+            "countShare": round(count_share, 5),
+            "totalCapital": round(cap, 2),
+            "capitalShare": round(capital_share, 5),
+            "ratio": round(capital_share / count_share, 3) if count_share else 0.0,
+        })
+
     payload = {
         "metadata": {
             "title": "Ethiopia Business Landscape",
@@ -477,6 +511,7 @@ def main():
         "legalStatusByRegion": legal_status_by_region,
         "capitalByLegalFormByRegion": capital_by_legal_by_region,
         "specialtyHierarchyByRegion": specialty_by_region,
+        "sectorCapitalShare": sector_capital_share,
     }
 
     OUT_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")

@@ -1,25 +1,86 @@
-# Ethiopia Trade Business Data
+# The Shape of Ethiopian Enterprise
 
-Workspace for exploring and documenting Ethiopia business registration and trade classification data.
+An analysis of Ethiopia's 2016 commercial register — 345,369 businesses — delivered as an
+interactive visualization and a written report.
 
-## Existing Data
+The headline finding is not that most Ethiopian businesses are one person, though 85.4% of
+them are. It is that informality is **not a flat national condition**. It falls steadily as
+capital requirements rise:
 
-The original files in the project root are preserved in place:
+| Sector | Businesses | Sole proprietorships |
+| --- | ---: | ---: |
+| Retail | 180,426 | 89.8% |
+| Services | 105,144 | 89.8% |
+| Hospitality | 24,731 | 85.9% |
+| Manufacturing | 12,824 | 62.4% |
+| Agriculture | 10,820 | 50.8% |
+| Construction | 10,755 | 35.7% |
+| Extractive | 669 | 17.8% |
 
-- `All Business 2016.csv`
-- `All Business 2016.xlsx`
-- `All business 2016 cleaned.xlsx`
-- `All_business_2016_DeepTaxonomy.csv`
-- `Sample.csv`
+A kiosk needs a person; a quarry needs a company. Median registered capital by legal form runs
+the same way, from 6,000 birr for a partnership to 800,000 for a share company.
 
-## Workspace Structure
+Three of the seven sectors above did not exist as categories in the source data. They were
+inside an unlabelled residual bucket holding 11.5% of the register, which is why the gradient
+had never been visible.
 
-- `docs/` - project notes, data inventory, and documentation.
-- `scripts/` - reusable analysis, cleaning, and export scripts.
-- `notebooks/` - exploratory notebooks.
-- `outputs/` - generated reports, extracts, figures, and deliverables.
-- `work/` - temporary working files that do not need to be committed.
+## What's here
+
+| | |
+| --- | --- |
+| `profile-visualization/` | Static D3 site. Ten views, one filter driving all of them, region→zone→woreda and sector→type→specialty drilldowns. |
+| `scripts/` | Data pipeline: rebuild, corrections, aggregation, privacy test. |
+| `docs/` | One document per piece of work, each recording what changed and by how much. |
+
+The written report is published separately as an artifact.
+
+## Running it
+
+```bash
+# Rebuild the published aggregates from the source CSV
+python scripts/prepare_profile_viz_data.py
+
+# Confirm no personal data reaches the published file
+python scripts/test_privacy.py
+
+# Serve the site
+cd profile-visualization && python -m http.server 8008
+```
+
+## Data and its repair
+
+The source is the 2016 commercial register: 345,369 records, 18 fields, covering 14 regions,
+137 zones and 1,161 woredas. It arrived needing substantial repair before it could be read.
+
+| Correction | Records | Written up in |
+| --- | ---: | --- |
+| Unclassified residual given real categories | 39,858 | `docs/taxonomy_category_fixes.md` |
+| Business-type mislabels corrected | 57,154 | `docs/busi_desc_taxonomy_comparison.md` |
+| Manufacturing records reclassified | 13,004 | `docs/taxonomy_category_fixes.md` |
+| Category spellings fixed at source | 34,905 | `docs/taxonomy_label_audit.md` |
+| Sector/specialty left stale by earlier passes | 5,812 | `docs/taxonomy_category_fixes.md` |
+
+The enriched file was also rebuilt from scratch after the original was found truncated to 65%
+of its records; `docs/taxonomy_rebuild.md` covers how, and how it was verified.
+
+## Privacy
+
+The register carries owner names, manager names and telephone numbers. None of it reaches the
+published file, and `scripts/test_privacy.py` enforces that rather than trusting it. The test
+checks five things, including one that is easy to miss: a median computed over a handful of
+businesses **is** those businesses' data. Capital statistics are withheld for any group below
+five businesses — a rule that caught five region-sector cells, one of them a single business
+whose registered capital would otherwise have been published.
+
+## Accessibility
+
+Charts are operable by keyboard: drilldown bars take focus and respond to Enter and Space, with
+a visible focus ring. Every chart carries a labelled description and a collapsible table of its
+underlying figures, so nothing depends on reading the picture. Colours were validated for
+colour-blind separation rather than chosen by eye.
 
 ## Notes
 
-Large raw data files are intentionally excluded from Git by `.gitignore`. Keep originals unchanged and write derived artifacts to `outputs/` or `work/`.
+- `d3.min.js` is vendored rather than loaded from a CDN, so the site runs offline and pins its
+  version. It is committed; the site does not render without it.
+- Large source files are excluded from Git by `.gitignore` and are kept alongside the repo.

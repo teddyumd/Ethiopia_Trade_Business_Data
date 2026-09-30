@@ -12,8 +12,19 @@ function showTooltip(event, html) {
   const tooltipNode = tooltip.node();
   const bounds = tooltipNode.getBoundingClientRect();
   const pad = 12;
-  const left = Math.min(event.clientX + 14, window.innerWidth - bounds.width - pad);
-  const top = Math.min(event.clientY + 14, window.innerHeight - bounds.height - pad);
+  // A focus event has no pointer coordinates, so anchor to the focused element
+  // instead. Without this a keyboard user gets the tooltip pinned at 0,0.
+  let ax = event.clientX;
+  let ay = event.clientY;
+  if (ax == null || ay == null || (ax === 0 && ay === 0)) {
+    const t = event.target && event.target.getBoundingClientRect
+      ? event.target.getBoundingClientRect()
+      : null;
+    ax = t ? t.left + t.width / 2 : window.innerWidth / 2;
+    ay = t ? t.bottom : window.innerHeight / 2;
+  }
+  const left = Math.min(ax + 14, window.innerWidth - bounds.width - pad);
+  const top = Math.min(ay + 14, window.innerHeight - bounds.height - pad);
   tooltip
     .style("left", `${Math.max(pad, left)}px`)
     .style("top", `${Math.max(pad, top)}px`);
@@ -853,9 +864,24 @@ function drawDrilldown({ chartId, crumbId, path, levels, onNavigate }) {
     .attr("height", barH)
     .attr("rx", 4)
     .attr("fill", level.color)
-    .on("mousemove", (event, d) => showTooltip(event, level.tooltip(d, path)))
-    .on("mouseleave", hideTooltip)
-    .on("click", (event, d) => { if (canDrill) { hideTooltip(); onNavigate([...path, d.name]); } });
+    // Reachable and operable without a mouse. The drilldowns are the most
+    // capable thing on the page and were previously click-only.
+    .attr("tabindex", 0)
+    .attr("role", canDrill ? "button" : "img")
+    .attr("aria-label", (d) => canDrill
+      ? `${d.name}, ${formatNumber(d.count)} businesses. Activate to open.`
+      : `${d.name}, ${formatNumber(d.count)} businesses.`)
+    .on("mousemove focus", (event, d) => showTooltip(event, level.tooltip(d, path)))
+    .on("mouseleave blur", hideTooltip)
+    .on("click", (event, d) => { if (canDrill) { hideTooltip(); onNavigate([...path, d.name]); } })
+    .on("keydown", (event, d) => {
+      if (!canDrill) return;
+      if (event.key === "Enter" || event.key === " " || event.key === "Spacebar") {
+        event.preventDefault();
+        hideTooltip();
+        onNavigate([...path, d.name]);
+      }
+    });
 
   g.selectAll(".dval").data(rows).join("text")
     .attr("class", "bar-label")
@@ -863,6 +889,11 @@ function drawDrilldown({ chartId, crumbId, path, levels, onNavigate }) {
     .attr("y", (d) => y(d.name) + y.bandwidth() / 2)
     .attr("dominant-baseline", "middle")
     .text((d) => formatNumber(d.count));
+
+  attachDataTable(chartId,
+    path.length ? `${levels[path.length].root} within ${path[path.length - 1]}` : levels[0].root,
+    [levels[path.length].root.replace(/s$/, ""), "Businesses"],
+    rows.map((d) => [d.name, formatNumber(d.count)]));
 }
 
 /* Every chart states what the current filter is doing to it - including the cases
@@ -918,8 +949,220 @@ function setScopeNotes(region, sector, active) {
     : "Capital by legal form across the whole registry.")
     + (inSector ? " Not broken down by sector." : ""));
 
+  put("capitalShareScope", "Computed across the whole register — neither filter narrows this comparison, so the two shares stay on the same base.");
+
   // zoneScope and specialtyScope are written by the drilldowns themselves, which
   // know both the filter and how deep the reader has navigated.
+}
+
+
+/* ---------------------------------------------------------------------------
+   Businesses against capital. Two readings of the same eight figures: a radar
+   for overall shape, and a dumbbell that can actually be read off.
+   --------------------------------------------------------------------------- */
+
+const SHORT_SECTOR = {
+  "Logistics, transport and communication": "Logistics",
+  "Mining and quarrying": "Mining",
+  "Tourism and Arts": "Tourism",
+};
+const shortSector = (s) => SHORT_SECTOR[s] || s;
+
+function drawSectorRadar(containerId, rows) {
+  const container = document.getElementById(containerId);
+  const width = container.clientWidth || 420;
+  const height = Math.max(320, Math.min(width, 420));
+  const svg = resizeSvg(container, height);
+  const cx = width / 2;
+  const cy = height / 2 + 4;
+  const r = Math.max(70, Math.min(width / 2, height / 2) - 62);
+  const n = rows.length;
+
+  // Radial scale is on share; the largest value present sets the outer ring so
+  // the shape uses the space without ever exceeding it.
+  const maxShare = Math.max(
+    d3.max(rows, (d) => d.capitalShare) || 0,
+    d3.max(rows, (d) => d.countShare) || 0
+  );
+  const rings = [0.25, 0.5, 0.75, 1];
+  const rad = (share) => (share / maxShare) * r;
+  const angle = (i) => (i / n) * 2 * Math.PI - Math.PI / 2;
+  const pt = (share, i) => [cx + rad(share) * Math.cos(angle(i)), cy + rad(share) * Math.sin(angle(i))];
+  const ringPath = (f) =>
+    rows.map((_, i) => {
+      const [x, y] = [cx + r * f * Math.cos(angle(i)), cy + r * f * Math.sin(angle(i))];
+      return `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join("") + "Z";
+
+  rings.forEach((f) => svg.append("path").attr("class", "radar-grid").attr("d", ringPath(f)));
+
+  rows.forEach((d, i) => {
+    const [x, y] = [cx + r * Math.cos(angle(i)), cy + r * Math.sin(angle(i))];
+    svg.append("line").attr("class", "radar-spoke").attr("x1", cx).attr("y1", cy).attr("x2", x).attr("y2", y);
+    const lx = cx + (r + 22) * Math.cos(angle(i));
+    const ly = cy + (r + 22) * Math.sin(angle(i));
+    const anchor = Math.abs(lx - cx) < 8 ? "middle" : lx > cx ? "start" : "end";
+    svg.append("text")
+      .attr("class", "radar-axis-label")
+      .attr("x", lx).attr("y", ly + 4)
+      .attr("text-anchor", anchor)
+      .text(shortSector(d.sector));
+  });
+
+  const poly = (key) => rows.map((d, i) => {
+    const [x, y] = pt(d[key], i);
+    return `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join("") + "Z";
+
+  svg.append("path").attr("d", poly("countShare"))
+    .attr("fill", getCss("--series-3")).attr("fill-opacity", 0.16)
+    .attr("stroke", getCss("--series-3")).attr("stroke-width", 2);
+  svg.append("path").attr("d", poly("capitalShare"))
+    .attr("fill", getCss("--series-2")).attr("fill-opacity", 0.16)
+    .attr("stroke", getCss("--series-2")).attr("stroke-width", 2);
+
+  rows.forEach((d, i) => {
+    [["countShare", "--series-3"], ["capitalShare", "--series-2"]].forEach(([k, c]) => {
+      const [x, y] = pt(d[k], i);
+      svg.append("circle").attr("cx", x).attr("cy", y).attr("r", 3.5)
+        .attr("fill", getCss(c))
+        .attr("tabindex", 0)
+        .attr("role", "img")
+        .attr("aria-label", `${d.sector}: ${k === "countShare" ? "share of businesses" : "share of capital"} ${formatPercent(d[k])}`)
+        .on("mousemove focus", (event) => showTooltip(event, radarTip(d)))
+        .on("mouseleave blur", hideTooltip);
+    });
+  });
+
+  svg.append("text").attr("class", "ax")
+    .attr("x", cx).attr("y", height - 4).attr("text-anchor", "middle")
+    .text(`outer ring = ${formatPercent(maxShare)}`);
+}
+
+function radarTip(d) {
+  return `<strong>${d.sector}</strong>` +
+    `<div class="tt-row"><span>Businesses</span><b>${formatNumber(d.count)} (${formatPercent(d.countShare)})</b></div>` +
+    `<div class="tt-row"><span>Capital</span><b>${formatPercent(d.capitalShare)}</b></div>` +
+    `<div class="tt-row"><span>Capital vs count</span><b>${d.ratio.toFixed(2)}×</b></div>`;
+}
+
+function drawSectorDumbbell(containerId, rows) {
+  const container = document.getElementById(containerId);
+  const ordered = [...rows].sort((a, b) => b.ratio - a.ratio);
+  const height = Math.max(300, ordered.length * 34 + 64);
+  const svg = resizeSvg(container, height);
+  const width = container.clientWidth || 460;
+  const margin = { top: 14, right: 58, bottom: 40, left: 104 };
+  const iw = Math.max(80, width - margin.left - margin.right);
+  const ih = height - margin.top - margin.bottom;
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const maxShare = Math.max(
+    d3.max(ordered, (d) => d.capitalShare) || 0,
+    d3.max(ordered, (d) => d.countShare) || 0
+  );
+  const x = d3.scaleLinear().domain([0, maxShare]).nice().range([0, iw]);
+  const y = d3.scaleBand().domain(ordered.map((d) => d.sector)).range([0, ih]).padding(0.42);
+
+  g.append("g").attr("class", "axis").attr("transform", `translate(0,${ih})`)
+    .call(d3.axisBottom(x).ticks(4).tickFormat(d3.format(".0%")).tickSize(0))
+    .call((s) => s.select(".domain").remove());
+  g.append("g").attr("class", "axis").call(d3.axisLeft(y).tickSize(0))
+    .call((s) => s.select(".domain").remove())
+    .selectAll("text").text((t) => shortSector(t));
+
+  const row = g.selectAll(".db").data(ordered).join("g")
+    .attr("class", "db")
+    .attr("transform", (d) => `translate(0,${y(d.sector) + y.bandwidth() / 2})`)
+    .attr("tabindex", 0)
+    .attr("role", "img")
+    .attr("aria-label", (d) =>
+      `${d.sector}: ${formatPercent(d.countShare)} of businesses, ${formatPercent(d.capitalShare)} of capital, ${d.ratio.toFixed(2)} times`)
+    .on("mousemove focus", (event, d) => showTooltip(event, radarTip(d)))
+    .on("mouseleave blur", hideTooltip);
+
+  row.append("line")
+    .attr("x1", (d) => x(Math.min(d.countShare, d.capitalShare)))
+    .attr("x2", (d) => x(Math.max(d.countShare, d.capitalShare)))
+    .attr("stroke", (d) => (d.capitalShare >= d.countShare ? getCss("--series-2") : getCss("--series-3")))
+    .attr("stroke-width", 2.5)
+    .attr("stroke-linecap", "round")
+    .attr("opacity", 0.5);
+
+  row.append("circle").attr("cx", (d) => x(d.countShare)).attr("r", 5.5).attr("fill", getCss("--series-3"));
+  row.append("circle").attr("cx", (d) => x(d.capitalShare)).attr("r", 5.5).attr("fill", getCss("--series-2"));
+
+  row.append("text").attr("class", "bar-label")
+    .attr("x", (d) => x(Math.max(d.countShare, d.capitalShare)) + 12)
+    .attr("dominant-baseline", "middle")
+    .text((d) => `${d.ratio.toFixed(2)}×`);
+
+  svg.append("text").attr("class", "ax")
+    .attr("x", margin.left).attr("y", height - 6)
+    .text("Share of all businesses / of all capital");
+}
+
+
+/* ---------------------------------------------------------------------------
+   Data tables. Every chart gets its figures as real text, for anyone who cannot
+   read the picture - screen reader, low vision, printed page - and as the relief
+   the colour-contrast rules require. Collapsed by default so the page still
+   reads as a visualization.
+   --------------------------------------------------------------------------- */
+
+function attachDataTable(chartId, caption, columns, rows) {
+  const chart = document.getElementById(chartId);
+  if (!chart || !rows || !rows.length) return;
+
+  const id = `${chartId}-table`;
+  let box = document.getElementById(id);
+  if (!box) {
+    box = document.createElement("details");
+    box.id = id;
+    box.className = "data-table";
+    chart.insertAdjacentElement("afterend", box);
+  }
+  box.innerHTML = "";
+
+  const summary = document.createElement("summary");
+  summary.textContent = `Show the figures (${rows.length} rows)`;
+  box.appendChild(summary);
+
+  const scroller = document.createElement("div");
+  scroller.className = "tbl-scroll";
+  const table = document.createElement("table");
+
+  const cap = document.createElement("caption");
+  cap.textContent = caption;
+  table.appendChild(cap);
+
+  const thead = document.createElement("thead");
+  const hr = document.createElement("tr");
+  columns.forEach((c, i) => {
+    const th = document.createElement("th");
+    th.textContent = c;
+    th.scope = "col";
+    if (i) th.className = "numeric";
+    hr.appendChild(th);
+  });
+  thead.appendChild(hr);
+  table.appendChild(thead);
+
+  const tbody = document.createElement("tbody");
+  rows.forEach((r) => {
+    const tr = document.createElement("tr");
+    r.forEach((cell, i) => {
+      const td = document.createElement(i ? "td" : "th");
+      if (!i) td.scope = "row";
+      else td.className = "numeric";
+      td.textContent = cell;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  scroller.appendChild(table);
+  box.appendChild(scroller);
 }
 
 
@@ -972,15 +1215,35 @@ function render(data) {
     document.getElementById("totalBusinesses").textContent = formatNumber(active.businesses);
     document.getElementById("regionCount").textContent = formatNumber(active.regionsShown);
     document.getElementById("sectorCount").textContent = formatNumber(active.sectorsShown);
-    document.getElementById("medianCapital").textContent = formatBirr(active.capital?.median || 0);
+    // A suppressed cell has a count but no median: too few businesses to publish
+    // a capital figure without disclosing an individual one. Say so rather than
+    // rendering a misleading zero.
+    const medianEl = document.getElementById("medianCapital");
+    if (active.capital?.suppressed || active.capital?.median == null) {
+      medianEl.textContent = "Withheld";
+      medianEl.title = "Too few businesses in this selection to publish a capital figure without identifying one of them.";
+    } else {
+      medianEl.textContent = formatBirr(active.capital.median);
+      medianEl.removeAttribute("title");
+    }
     document.getElementById("filterDescription").textContent = filterDescription;
     document.getElementById("resetFilters").hidden = selectedRegion === "All" && selectedSector === "All";
     setScopeNotes(selectedRegion, selectedSector, active);
     // Chart subject lines are static in the HTML now; the per-chart scope notes
     // carry the filter state, so nothing here rewrites the descriptions.
-    drawHorizontalBars("regionChart", regionChartData.slice(0, 14), { left: window.innerWidth < 520 ? 112 : 150, color: getCss("--green") });
-    drawDonut("sectorChart", sectorChartData.slice(0, 8));
-    drawHorizontalBars("typeChart", typeData.slice(0, 10), { left: 190, color: getCss("--blue") });
+    const regionRows = regionChartData.slice(0, 14);
+    const sectorRows = sectorChartData.slice(0, 8);
+    const typeRows = typeData.slice(0, 10);
+    drawHorizontalBars("regionChart", regionRows, { left: window.innerWidth < 520 ? 112 : 150, color: getCss("--green") });
+    drawDonut("sectorChart", sectorRows);
+    drawHorizontalBars("typeChart", typeRows, { left: 190, color: getCss("--blue") });
+
+    attachDataTable("regionChart", "Registered businesses by region",
+      ["Region", "Businesses"], regionRows.map((d) => [d.name || d.region, formatNumber(d.count)]));
+    attachDataTable("sectorChart", "Registered businesses by sector",
+      ["Sector", "Businesses"], sectorRows.map((d) => [d.name, formatNumber(d.count)]));
+    attachDataTable("typeChart", "Most common business types",
+      ["Business type", "Businesses"], typeRows.map((d) => [d.name, formatNumber(d.count)]));
   }
 
   function updateStaticCharts() {
@@ -1048,6 +1311,7 @@ function render(data) {
       updateStaticCharts();
       updateComparison();
       drawFormalityViews();
+      drawCapitalShareViews();
       renderLegalStructure(data);
       renderZones(zonePath);
       renderSpec(specPath);
@@ -1066,10 +1330,33 @@ function render(data) {
       || data.capitalByLegalForm || [];
   }
   function drawFormalityViews() {
-    drawFormality("formalityChart", formalityRows());
-    drawLegalCapital("legalCapitalChart", legalCapitalRows());
+    const f = formalityRows();
+    const l = legalCapitalRows();
+    drawFormality("formalityChart", f);
+    drawLegalCapital("legalCapitalChart", l);
+    attachDataTable("formalityChart", "Legal structure by sector",
+      ["Sector", "Businesses", "Sole proprietor"],
+      f.map((d) => [d.macroSector, formatNumber(d.count), formatPercent(d.soleProprietorShare)]));
+    attachDataTable("legalCapitalChart", "Registered capital by legal form",
+      ["Legal form", "Businesses", "25th pct", "Median", "75th pct"],
+      l.map((d) => [d.name, formatNumber(d.count), formatNumber(d.p25), formatNumber(d.median), formatNumber(d.p75)]));
   }
   drawFormalityViews();
+
+  // Businesses against capital. National only: the aggregate is computed across
+  // the whole register, so the region filter does not narrow it.
+  const capitalShareRows = data.sectorCapitalShare || [];
+  function drawCapitalShareViews() {
+    drawSectorRadar("sectorRadarChart", capitalShareRows);
+    drawSectorDumbbell("sectorDumbbellChart", capitalShareRows);
+    attachDataTable("sectorDumbbellChart", "Share of businesses against share of capital, by sector",
+      ["Sector", "Businesses", "Share of businesses", "Share of capital", "Capital vs count"],
+      [...capitalShareRows].sort((a, b) => b.ratio - a.ratio).map((d) => [
+        d.sector, formatNumber(d.count), formatPercent(d.countShare),
+        formatPercent(d.capitalShare), `${d.ratio.toFixed(2)}x`,
+      ]));
+  }
+  drawCapitalShareViews();
 
   // ---- Geography drilldown: region -> zone -> woreda ------------------------
   const zoneData = data.zoneProfiles || {};

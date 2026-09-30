@@ -697,3 +697,166 @@ select {
   border: 0;
   border-top: 1px solid rgba(255, 255, 255, 0.22);
 }
+
+/* --- Businesses against capital: two readings of the same figures ---------- */
+
+.dual {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 26px 32px;
+  align-items: start;
+}
+
+.dual-col {
+  min-width: 0;
+}
+
+.sub-chart-title {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.caveat {
+  margin: 12px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--muted);
+  max-width: 52ch;
+}
+
+.caveat strong {
+  color: var(--ink);
+}
+
+.radar-grid {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.radar-spoke {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.radar-axis-label {
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+/* Legend for the two series in Businesses Against Capital. Both charts read
+   from it, so it sits above them rather than being repeated in each. */
+.swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 8px;
+  vertical-align: -1px;
+}
+
+.swatch-count { background: var(--series-3); }
+.swatch-capital { background: var(--series-2); }
+
+#capitalShareLegend {
+  margin-top: 12px;
+  border-top: 0;
+  padding-top: 0;
+}
+
+/* --- Keyboard focus ------------------------------------------------------- */
+
+/* Charts are SVG, so focus needs an explicit outline: the browser default is
+   invisible on a filled rect. */
+:where(a, button, select, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--green);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+svg :where(rect, circle, g)[tabindex]:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 1px;
+}
+
+/* --- Data tables ---------------------------------------------------------- */
+
+.data-table {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.data-table > summary {
+  cursor: pointer;
+  font-size: 0.86rem;
+  color: var(--green);
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 2px;
+}
+
+.data-table > summary::-webkit-details-marker {
+  display: none;
+}
+
+.data-table > summary::before {
+  content: "▸";
+  font-size: 0.8em;
+  transition: transform 0.15s ease;
+}
+
+.data-table[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.data-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin-top: 10px;
+}
+
+.data-table caption {
+  text-align: left;
+  color: var(--muted);
+  font-size: 0.82rem;
+  padding-bottom: 8px;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 6px 12px 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-weight: 400;
+}
+
+.data-table thead th {
+  color: var(--muted);
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom-color: var(--ink);
+}
+
+.data-table .numeric {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.data-table tbody th {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .data-table > summary::before { transition: none; }
+}

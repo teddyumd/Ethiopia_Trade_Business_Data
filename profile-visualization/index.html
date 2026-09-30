@@ -159,6 +159,51 @@
 
       <section class="grid">
         <article class="panel panel-wide">
+          <div class="panel-heading">
+            <div>
+              <h2>Businesses Against Capital</h2>
+              <p>Where the businesses are is not where the money is.</p>
+              <p class="how-to-read">
+                Each sector has two shares: its share of the 345,369 registered
+                businesses, and its share of the 2.1 trillion birr they collectively
+                registered. The two come apart sharply. Logistics is a seventh of the
+                register and well over half its capital; trade is half the register
+                and a sixth of the capital.
+              </p>
+              <p class="scope-note" id="capitalShareScope"></p>
+              <p class="chart-legend" id="capitalShareLegend">
+                <span><i class="swatch swatch-count"></i>Share of all businesses</span>
+                <span><i class="swatch swatch-capital"></i>Share of all registered capital</span>
+              </p>
+            </div>
+          </div>
+          <div class="dual">
+            <div class="dual-col">
+              <p class="sub-chart-title">Shape</p>
+              <div id="sectorRadarChart" class="chart" role="img" aria-label="Radar comparing each sector's share of businesses with its share of capital"></div>
+              <p class="caveat">
+                <strong>Read the shape, not the area.</strong> On a radar the area of
+                a shape grows with the square of its values, so a sector at 58% looks
+                far more than three times one at 16%. The axis order is arbitrary too:
+                rotating the spokes changes the picture without changing the data. The
+                chart beside this one gives the actual figures.
+              </p>
+            </div>
+            <div class="dual-col">
+              <p class="sub-chart-title">Figures</p>
+              <div id="sectorDumbbellChart" class="chart" role="img" aria-label="Each sector's share of businesses and share of capital, ranked by the gap between them"></div>
+              <p class="caveat">
+                Ranked by how far the two shares diverge. A line running right means a
+                sector holds more capital than its count of businesses suggests;
+                running left, less.
+              </p>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="grid">
+        <article class="panel panel-wide">
           <div class="panel-heading split-heading">
             <div>
               <h2>Inside the Regions</h2>
