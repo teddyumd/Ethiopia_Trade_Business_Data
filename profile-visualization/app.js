@@ -1046,63 +1046,6 @@ function radarTip(d) {
     `<div class="tt-row"><span>Capital vs count</span><b>${d.ratio.toFixed(2)}×</b></div>`;
 }
 
-function drawSectorDumbbell(containerId, rows) {
-  const container = document.getElementById(containerId);
-  const ordered = [...rows].sort((a, b) => b.ratio - a.ratio);
-  const height = Math.max(300, ordered.length * 34 + 64);
-  const svg = resizeSvg(container, height);
-  const width = container.clientWidth || 460;
-  const margin = { top: 14, right: 58, bottom: 40, left: 104 };
-  const iw = Math.max(80, width - margin.left - margin.right);
-  const ih = height - margin.top - margin.bottom;
-  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-
-  const maxShare = Math.max(
-    d3.max(ordered, (d) => d.capitalShare) || 0,
-    d3.max(ordered, (d) => d.countShare) || 0
-  );
-  const x = d3.scaleLinear().domain([0, maxShare]).nice().range([0, iw]);
-  const y = d3.scaleBand().domain(ordered.map((d) => d.sector)).range([0, ih]).padding(0.42);
-
-  g.append("g").attr("class", "axis").attr("transform", `translate(0,${ih})`)
-    .call(d3.axisBottom(x).ticks(4).tickFormat(d3.format(".0%")).tickSize(0))
-    .call((s) => s.select(".domain").remove());
-  g.append("g").attr("class", "axis").call(d3.axisLeft(y).tickSize(0))
-    .call((s) => s.select(".domain").remove())
-    .selectAll("text").text((t) => shortSector(t));
-
-  const row = g.selectAll(".db").data(ordered).join("g")
-    .attr("class", "db")
-    .attr("transform", (d) => `translate(0,${y(d.sector) + y.bandwidth() / 2})`)
-    .attr("tabindex", 0)
-    .attr("role", "img")
-    .attr("aria-label", (d) =>
-      `${d.sector}: ${formatPercent(d.countShare)} of businesses, ${formatPercent(d.capitalShare)} of capital, ${d.ratio.toFixed(2)} times`)
-    .on("mousemove focus", (event, d) => showTooltip(event, radarTip(d)))
-    .on("mouseleave blur", hideTooltip);
-
-  row.append("line")
-    .attr("x1", (d) => x(Math.min(d.countShare, d.capitalShare)))
-    .attr("x2", (d) => x(Math.max(d.countShare, d.capitalShare)))
-    .attr("stroke", (d) => (d.capitalShare >= d.countShare ? getCss("--series-2") : getCss("--series-3")))
-    .attr("stroke-width", 2.5)
-    .attr("stroke-linecap", "round")
-    .attr("opacity", 0.5);
-
-  row.append("circle").attr("cx", (d) => x(d.countShare)).attr("r", 5.5).attr("fill", getCss("--series-3"));
-  row.append("circle").attr("cx", (d) => x(d.capitalShare)).attr("r", 5.5).attr("fill", getCss("--series-2"));
-
-  row.append("text").attr("class", "bar-label")
-    .attr("x", (d) => x(Math.max(d.countShare, d.capitalShare)) + 12)
-    .attr("dominant-baseline", "middle")
-    .text((d) => `${d.ratio.toFixed(2)}×`);
-
-  svg.append("text").attr("class", "ax")
-    .attr("x", margin.left).attr("y", height - 6)
-    .text("Share of all businesses / of all capital");
-}
-
-
 /* ---------------------------------------------------------------------------
    Data tables. Every chart gets its figures as real text, for anyone who cannot
    read the picture - screen reader, low vision, printed page - and as the relief
@@ -1120,7 +1063,11 @@ function attachDataTable(chartId, caption, columns, rows) {
     box = document.createElement("details");
     box.id = id;
     box.className = "data-table";
-    chart.insertAdjacentElement("afterend", box);
+    // Sit after any explanatory note, not between the chart and its explanation,
+    // so the note can refer to the figures as being below it.
+    const parent = chart.parentElement;
+    const note = parent ? parent.querySelector(":scope > .caveat") : null;
+    (note || chart).insertAdjacentElement("afterend", box);
   }
   box.innerHTML = "";
 
@@ -1348,8 +1295,9 @@ function render(data) {
   const capitalShareRows = data.sectorCapitalShare || [];
   function drawCapitalShareViews() {
     drawSectorRadar("sectorRadarChart", capitalShareRows);
-    drawSectorDumbbell("sectorDumbbellChart", capitalShareRows);
-    attachDataTable("sectorDumbbellChart", "Share of businesses against share of capital, by sector",
+    // The radar cannot be read off precisely by design, so the table is not
+    // optional here - it is where the actual shares live.
+    attachDataTable("sectorRadarChart", "Share of businesses against share of capital, by sector",
       ["Sector", "Businesses", "Share of businesses", "Share of capital", "Capital vs count"],
       [...capitalShareRows].sort((a, b) => b.ratio - a.ratio).map((d) => [
         d.sector, formatNumber(d.count), formatPercent(d.countShare),

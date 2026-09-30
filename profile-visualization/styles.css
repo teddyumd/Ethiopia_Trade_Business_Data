@@ -698,7 +698,13 @@ select {
   border-top: 1px solid rgba(255, 255, 255, 0.22);
 }
 
-/* --- Businesses against capital: two readings of the same figures ---------- */
+/* --- Businesses against capital -------------------------------------------- */
+
+/* The radar stands alone now. Cap its width so it stays a chart rather than
+   stretching across a wide panel, and keep the caveat beside it readable. */
+.radar-wrap {
+  max-width: 560px;
+}
 
 .dual {
   display: grid;
