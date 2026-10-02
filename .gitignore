@@ -18,3 +18,4 @@ All_business_2016_DeepTaxonomy.csv
 # Scratch files left by the correction scripts
 *.csv.tmp
 *.tmp.csv
+_pre_github_backup/
