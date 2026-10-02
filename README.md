@@ -72,6 +72,11 @@ businesses **is** those businesses' data. Capital statistics are withheld for an
 five businesses — a rule that caught five region-sector cells, one of them a single business
 whose registered capital would otherwise have been published.
 
+`Sample.csv` is here to show the raw file's column structure. Its seven identifying columns —
+business name, the three manager name fields, both telephone numbers and the house number —
+hold placeholders, not the real values they had before this repository was published. The
+large source files themselves are excluded by `.gitignore` and never leave the machine.
+
 ## Accessibility
 
 Charts are operable by keyboard: drilldown bars take focus and respond to Enter and Space, with
