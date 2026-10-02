@@ -760,25 +760,33 @@ select {
 
 .radar-wrap > .chart {
   grid-column: 1;
-  grid-row: 1 / span 2;
+  grid-row: 1;
   /* This chart sizes its own box to the circle inside it, so the page-wide
      300px floor would only reintroduce the empty space. */
   min-height: 0;
 }
 
-.radar-wrap > .chart-notes.is-shown,
-.radar-wrap > .caveat {
+.radar-aside {
   grid-column: 2;
-  margin-top: 0;
-}
-
-.radar-wrap > .chart-notes.is-shown {
   grid-row: 1;
-  align-self: end;
+  align-self: center;
 }
 
-.radar-wrap > .caveat {
-  grid-row: 2;
+.radar-aside > .chart-notes.is-shown,
+.radar-aside > .caveat,
+.radar-aside > .why-it-matters {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.radar-aside > :last-child {
+  margin-bottom: 0;
+}
+
+.why-it-matters {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
 }
 
 /* The figures table belongs under both columns. */
@@ -793,15 +801,14 @@ select {
   }
 
   .radar-wrap > .chart,
-  .radar-wrap > .chart-notes.is-shown,
-  .radar-wrap > .caveat,
+  .radar-aside,
   .radar-wrap > .data-table {
     grid-column: 1;
     grid-row: auto;
   }
 
-  .radar-wrap > .chart-notes.is-shown {
-    margin-top: 10px;
+  .radar-aside {
+    margin-top: 12px;
   }
 }
 
@@ -851,6 +858,19 @@ select {
 .radar-axis-label {
   font-size: 11px;
   fill: var(--muted);
+}
+
+/* Ring values, sitting on top of the grid and sometimes on top of an outline.
+   paint-order puts a stroke of the panel colour behind the glyphs, which keeps
+   them readable without a box around each one. */
+.radar-ring-label {
+  font-size: 10.5px;
+  fill: var(--muted);
+  font-variant-numeric: tabular-nums;
+  paint-order: stroke;
+  stroke: var(--panel);
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }
 
 /* Legend for the two series in Businesses Against Capital. Both charts read

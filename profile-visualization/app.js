@@ -163,7 +163,11 @@ function attachChartNotes(chartId, notes, show) {
   if (!box) {
     box = document.createElement("ul");
     box.id = id;
-    chart.insertAdjacentElement("afterend", box);
+    // A panel can nominate where its notes go - the radar puts them at the top of
+    // the column beside the chart instead of directly underneath it.
+    const into = chart.dataset.notesInto && document.getElementById(chart.dataset.notesInto);
+    if (into) into.prepend(box);
+    else chart.insertAdjacentElement("afterend", box);
   }
   // The class decides visibility, not a media query: these charts size to their
   // panel, so a half-width panel is narrow while the viewport is not.
@@ -1494,6 +1498,38 @@ function drawSectorRadar(containerId, rows) {
 
   rings.forEach((f) => svg.append("path").attr("class", "radar-grid").attr("d", ringPath(f)));
 
+  // Label the rings. Without this a radar has no readable scale at all: the
+  // reader sees that one outline reaches further than another with no way to say
+  // how much further.
+  //
+  // Where to put them is the whole difficulty. Climbing straight up from the
+  // centre is the textbook answer and it was wrong here - the top spoke is Trade,
+  // whose outline runs right through the labels. So the labels go up the spoke
+  // with the least data on it, found from the rows being drawn, which keeps them
+  // off the outlines whatever the data does. A halo of the panel colour behind
+  // the glyphs covers the grid line they do sit on.
+  // Not on a spoke, but in the gap beside it: a spoke carries its own axis label
+  // out at the rim, and the outermost ring value collided with it. The wedge
+  // between the two quietest neighbouring spokes has neither.
+  const level = (i) => Math.max(rows[i].countShare, rows[i].capitalShare);
+  let emptiestGap = 0;
+  for (let i = 1; i < n; i++) {
+    const here = level(i) + level((i + 1) % n);
+    const best = level(emptiestGap) + level((emptiestGap + 1) % n);
+    if (here < best) emptiestGap = i;
+  }
+  const labelAngle = angle(emptiestGap) + Math.PI / n;
+  const onLeft = Math.cos(labelAngle) < -0.1;
+  (narrow ? [0.5, 1] : rings).forEach((fr) => {
+    svg.append("text")
+      .attr("class", "radar-ring-label")
+      .style("font-size", labelFont)
+      .attr("x", cx + r * fr * Math.cos(labelAngle) + (onLeft ? -4 : 4))
+      .attr("y", cy + r * fr * Math.sin(labelAngle) - 5)
+      .attr("text-anchor", Math.abs(Math.cos(labelAngle)) < 0.1 ? "middle" : (onLeft ? "end" : "start"))
+      .text(formatPercent(maxShare * fr));
+  });
+
   rows.forEach((d, i) => {
     const [x, y] = [cx + r * Math.cos(angle(i)), cy + r * Math.sin(angle(i))];
     svg.append("line").attr("class", "radar-spoke").attr("x1", cx).attr("y1", cy).attr("x2", x).attr("y2", y);
@@ -1538,7 +1574,7 @@ function drawSectorRadar(containerId, rows) {
 
   svg.append("text").attr("class", "axis-title")
     .attr("x", cx).attr("y", height - 4).attr("text-anchor", "middle")
-    .text(`outer ring = ${formatPercent(maxShare)}`);
+    .text("Each ring is a share of the national total");
 
   // A radar cannot be read off precisely, so the note carries the one number
   // worth taking away: the sector furthest from its own share of businesses.
@@ -1583,7 +1619,12 @@ function attachDataTable(chartId, caption, columns, rows) {
     const parent = chart.parentElement;
     const note = parent ? parent.querySelector(":scope > .caveat") : null;
     const notes = document.getElementById(`${chartId}-notes`);
-    (note || notes || chart).insertAdjacentElement("afterend", box);
+    const anchor = note || notes || chart;
+    // Only follow the anchor if it is a sibling of the chart. When the notes or
+    // the caveat live inside a column of their own, the table would end up in
+    // that column; it belongs under the whole panel.
+    if (anchor.parentElement === parent) anchor.insertAdjacentElement("afterend", box);
+    else parent.appendChild(box);
   }
   box.innerHTML = "";
 
