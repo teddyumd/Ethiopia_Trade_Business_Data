@@ -1432,11 +1432,48 @@ const shortSector = (s) => SHORT_SECTOR[s] || s;
 function drawSectorRadar(containerId, rows) {
   const container = document.getElementById(containerId);
   const width = container.clientWidth || 420;
-  const height = Math.max(320, Math.min(width, 420));
+  // The old sizing capped the drawing square at 420px and reserved a flat 62px
+  // for labels, so a wider panel bought nothing but white space. The square now
+  // follows the container, and the label gutter is measured from the longest
+  // label actually being drawn rather than guessed at.
+  const narrow = width < 620;
+  // A label gutter is a straight subtraction from the radius, so on a phone the
+  // full sector names left a circle 43% of the box. The gutter gets a budget as
+  // a fraction of the card, and the labels are trimmed to it - measured, because
+  // "Manufacturing" and "Trade" are nothing like the same width.
+  const probe = d3.select(container).append("svg")
+    .attr("width", 0).attr("height", 0).style("position", "absolute");
+  const measure = (text) => {
+    const t = probe.append("text").attr("class", "radar-axis-label")
+      .style("font-size", narrow ? "10.5px" : null).text(text);
+    const w = t.node().getComputedTextLength();
+    t.remove();
+    return w;
+  };
+  const budget = Math.min(d3.max(rows, (d) => measure(shortSector(d.sector))) || 60, width * (narrow ? 0.2 : 0.26));
+  // Trim once here so the drawing pass below can use the result directly.
+  const axisLabel = (sector) => {
+    let text = shortSector(sector);
+    if (measure(text) <= budget) return text;
+    while (text.length > 3 && measure(`${text.trimEnd()}\u2026`) > budget) text = text.slice(0, -1);
+    return `${text.trimEnd()}\u2026`;
+  };
+  const axisLabels = new Map(rows.map((d) => [d.sector, axisLabel(d.sector)]));
+  probe.remove();
+  const labelRoom = budget + 16;
+
+  // Size the radius first, then the box around it. Deriving the radius from a
+  // height picked in advance is what left a 165px circle floating in a 372px
+  // box on a phone: the labels bound the radius horizontally long before the
+  // height does, and the leftover height was simply empty.
+  const CHROME = 116;              // top and bottom spoke labels, plus the footnote
+  const MAX_BOX = 620;
+  const r = Math.max(70, Math.min(width / 2 - labelRoom, (MAX_BOX - CHROME) / 2));
+  const height = Math.min(MAX_BOX, 2 * r + CHROME);
   const svg = resizeSvg(container, height);
   const cx = width / 2;
   const cy = height / 2 + 4;
-  const r = Math.max(70, Math.min(width / 2, height / 2) - 62);
+  const labelFont = narrow ? "10.5px" : null;
   const n = rows.length;
 
   // Radial scale is on share; the largest value present sets the outer ring so
@@ -1460,14 +1497,18 @@ function drawSectorRadar(containerId, rows) {
   rows.forEach((d, i) => {
     const [x, y] = [cx + r * Math.cos(angle(i)), cy + r * Math.sin(angle(i))];
     svg.append("line").attr("class", "radar-spoke").attr("x1", cx).attr("y1", cy).attr("x2", x).attr("y2", y);
-    const lx = cx + (r + 22) * Math.cos(angle(i));
-    const ly = cy + (r + 22) * Math.sin(angle(i));
+    const lx = cx + (r + (narrow ? 14 : 22)) * Math.cos(angle(i));
+    const ly = cy + (r + (narrow ? 14 : 22)) * Math.sin(angle(i));
     const anchor = Math.abs(lx - cx) < 8 ? "middle" : lx > cx ? "start" : "end";
-    svg.append("text")
+    const shown = axisLabels.get(d.sector) || shortSector(d.sector);
+    const label = svg.append("text")
       .attr("class", "radar-axis-label")
+      .style("font-size", labelFont)
       .attr("x", lx).attr("y", ly + 4)
       .attr("text-anchor", anchor)
-      .text(shortSector(d.sector));
+      .text(shown);
+    // Trimmed labels keep the full sector name for hover and assistive tech.
+    if (shown !== d.sector) label.append("title").text(d.sector);
   });
 
   const poly = (key) => rows.map((d, i) => {

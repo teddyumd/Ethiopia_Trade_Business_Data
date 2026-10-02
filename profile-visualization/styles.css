@@ -747,8 +747,62 @@ select {
 
 /* The radar stands alone now. Cap its width so it stays a chart rather than
    stretching across a wide panel, and keep the caveat beside it readable. */
+/* The 560px cap here was left over from when a dumbbell chart sat beside the
+   radar. With the dumbbell gone the radar was a small circle in a half-empty
+   panel, so the panel is now two columns: the chart takes the space it was
+   wasting, and its note and caveat move alongside instead of underneath. */
 .radar-wrap {
-  max-width: 560px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(250px, 1fr);
+  gap: 4px 36px;
+  align-items: start;
+}
+
+.radar-wrap > .chart {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  /* This chart sizes its own box to the circle inside it, so the page-wide
+     300px floor would only reintroduce the empty space. */
+  min-height: 0;
+}
+
+.radar-wrap > .chart-notes.is-shown,
+.radar-wrap > .caveat {
+  grid-column: 2;
+  margin-top: 0;
+}
+
+.radar-wrap > .chart-notes.is-shown {
+  grid-row: 1;
+  align-self: end;
+}
+
+.radar-wrap > .caveat {
+  grid-row: 2;
+}
+
+/* The figures table belongs under both columns. */
+.radar-wrap > .data-table {
+  grid-column: 1 / -1;
+}
+
+/* One column once the second would be too narrow to read. */
+@media (max-width: 900px) {
+  .radar-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .radar-wrap > .chart,
+  .radar-wrap > .chart-notes.is-shown,
+  .radar-wrap > .caveat,
+  .radar-wrap > .data-table {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .radar-wrap > .chart-notes.is-shown {
+    margin-top: 10px;
+  }
 }
 
 .dual {
