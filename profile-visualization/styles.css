@@ -911,3 +911,73 @@ svg :where(rect, circle, g)[tabindex]:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .data-table > summary::before { transition: none; }
 }
+
+/* --- Annotations ----------------------------------------------------------
+   Recessive by construction: the band is a tint of the ink rather than a colour
+   of its own, so it never competes with a series, and the leader line is
+   thinner than any mark. */
+.ann-band {
+  fill: var(--ink);
+  opacity: 0.05;
+}
+
+.ann-band-label {
+  fill: var(--muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ann-lead {
+  stroke: var(--muted);
+  stroke-width: 1;
+  opacity: 0.6;
+}
+
+.ann-dot {
+  fill: var(--muted);
+}
+
+.ann-note {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* The notes list under a chart. Clipped, not removed, while the notes are drawn
+   on the plot: the chart is role="img", so this list is the only form of the
+   annotation a screen reader ever reaches. */
+.chart-notes {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.chart-notes.is-shown {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 10px 0 0;
+  padding: 0 0 0 18px;
+  overflow: visible;
+  clip-path: none;
+  white-space: normal;
+  list-style: disc;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.chart-notes.is-shown li {
+  margin-bottom: 5px;
+}
+
+.chart-notes.is-shown li::marker {
+  color: var(--line);
+}

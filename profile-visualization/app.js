@@ -44,6 +44,138 @@ function resizeSvg(container, height) {
     .attr("height", height);
 }
 
+/* ---- Annotation layer ------------------------------------------------------
+   Datawrapper's three devices, in the three forms this data has a use for: a
+   shaded band behind the marks, a short note on the plot with a leader to the
+   mark it is about, and a highlighted mark carrying its own label.
+
+   Two rules the notes here follow. A note states the finding - it never
+   restates an axis the reader can already see. And the text is COMPUTED from
+   the rows being drawn, so a note cannot drift out of date when the region
+   filter changes the chart underneath it.
+
+   Responsiveness follows Datawrapper too: below the breakpoint the notes come
+   off the plot, where there is no room for them, and sit under the chart as a
+   list. The list is in the DOM at every width - a chart div is role="img", so
+   its SVG text is presentational to a screen reader, and this list is how an
+   annotation reaches anyone not looking at the picture. It is clipped rather
+   than removed when the notes are drawn on the plot.
+*/
+/* Trim axis tick labels to the gutter they are given. A fixed character count
+   cannot know the gutter, the font or the width of the actual words, so this
+   measures each label and shortens it until it fits. The full text goes into a
+   <title>, and the tooltip and the table carry it in full regardless. */
+function trimAxisLabels(axis, room) {
+  axis.selectAll("text").each(function (name) {
+    const node = this;
+    if (room <= 0 || node.getComputedTextLength() <= room) return;
+    d3.select(node).append("title").text(name);
+    let text = String(name);
+    while (text.length > 4 && node.getComputedTextLength() > room) {
+      text = text.slice(0, -1);
+      node.firstChild.nodeValue = `${text.trimEnd()}\u2026`;
+    }
+  });
+}
+
+function annotationLayer(svg, chartId, opts) {
+  const o = opts || {};
+  const narrow = !!o.narrow;
+  const collected = [];
+  const g = svg.append("g").attr("class", "ann-layer");
+
+  // SVG has no text wrapping, so measure word by word and break into tspans.
+  function wrap(sel, str, maxWidth) {
+    const words = String(str).split(/\s+/);
+    const x = sel.attr("x");
+    let line = [];
+    let tspan = sel.append("tspan").attr("x", x).attr("dy", 0);
+    words.forEach((w) => {
+      line.push(w);
+      tspan.text(line.join(" "));
+      if (tspan.node().getComputedTextLength() > maxWidth && line.length > 1) {
+        line.pop();
+        tspan.text(line.join(" "));
+        line = [w];
+        tspan = sel.append("tspan").attr("x", x).attr("dy", "1.3em").text(w);
+      }
+    });
+  }
+
+  const api = {
+    // A shaded interval behind the marks: "these rows are the story".
+    band(spec) {
+      if (spec.label) collected.push(spec.label);
+      if (narrow) return api;
+      g.append("rect").attr("class", "ann-band")
+        .attr("x", spec.x).attr("y", spec.y)
+        .attr("width", Math.max(0, spec.width)).attr("height", Math.max(0, spec.height))
+        .attr("rx", 4);
+      if (spec.label) {
+        g.append("text").attr("class", "ann-band-label")
+          .attr("x", spec.x + 8).attr("y", spec.y + 14).text(spec.label);
+      }
+      return api;
+    },
+    // A note on the plot, optionally with a leader line to the mark it is about.
+    note(spec) {
+      collected.push(spec.text);
+      if (narrow) return api;
+      // Clamp the note inside the plot. A caller places it relative to the mark
+      // it describes and cannot know how wide the wrapped text ends up, so the
+      // layer is what keeps it from running off the edge.
+      const limit = o.plotWidth || 0;
+      const box = spec.maxWidth || 200;
+      if (limit && (spec.anchor || "start") === "start" && spec.x + box > limit) {
+        spec.x = Math.max(0, limit - box);
+      }
+      if (spec.to) {
+        g.append("line").attr("class", "ann-lead")
+          .attr("x1", spec.x + (spec.leadFrom || 0)).attr("y1", spec.y - 4)
+          .attr("x2", spec.to.x).attr("y2", spec.to.y);
+        g.append("circle").attr("class", "ann-dot")
+          .attr("cx", spec.to.x).attr("cy", spec.to.y).attr("r", 3);
+      }
+      const t = g.append("text").attr("class", "ann-note")
+        .attr("x", spec.x).attr("y", spec.y)
+        .attr("text-anchor", spec.anchor || "start");
+      wrap(t, spec.text, spec.maxWidth || 200);
+      return api;
+    },
+    // Done drawing: publish whatever was collected under the chart.
+    done() {
+      attachChartNotes(chartId, collected, narrow);
+      return api;
+    },
+  };
+  return api;
+}
+
+function attachChartNotes(chartId, notes, show) {
+  const chart = document.getElementById(chartId);
+  if (!chart) return;
+  const id = `${chartId}-notes`;
+  let box = document.getElementById(id);
+  if (!notes || !notes.length) {
+    if (box) box.remove();
+    return;
+  }
+  if (!box) {
+    box = document.createElement("ul");
+    box.id = id;
+    chart.insertAdjacentElement("afterend", box);
+  }
+  // The class decides visibility, not a media query: these charts size to their
+  // panel, so a half-width panel is narrow while the viewport is not.
+  box.className = show ? "chart-notes is-shown" : "chart-notes";
+  box.innerHTML = "";
+  notes.forEach((n) => {
+    const li = document.createElement("li");
+    li.textContent = n;
+    box.appendChild(li);
+  });
+}
+
 function drawHorizontalBars(containerId, data, options) {
   const container = document.getElementById(containerId);
   const height = Math.max(230, data.length * 34 + 44);
@@ -68,7 +200,8 @@ function drawHorizontalBars(containerId, data, options) {
   g.append("g")
     .attr("class", "axis")
     .call(d3.axisLeft(y).tickSize(0))
-    .call((axis) => axis.select(".domain").remove());
+    .call((axis) => axis.select(".domain").remove())
+    .call((axis) => trimAxisLabels(axis, margin.left - 12));
 
   g.append("g")
     .attr("class", "axis")
@@ -96,6 +229,39 @@ function drawHorizontalBars(containerId, data, options) {
     .attr("text-anchor", (d) => x(d.count) > innerWidth - 50 ? "end" : "start")
     .style("fill", (d) => x(d.count) > innerWidth - 50 ? "#fffdf8" : null)
     .text((d) => formatCompact(d.count));
+
+  // The caller writes the note, because only it knows what these rows mean. It
+  // gets the scales back so a band or a leader can land on the right mark.
+  const ann = annotationLayer(g, containerId, { narrow: width < 620, plotWidth: innerWidth });
+  if (options.annotate) {
+    options.annotate(ann, { x, y, innerWidth, innerHeight, width, narrow: width < 620, data });
+  }
+  ann.done();
+}
+
+/* How many of the leading rows it takes to pass a share of the total, and what
+   that share actually is. Every "the top few hold most of it" note on this page
+   is computed with this rather than written out, so none of them can go stale
+   when a filter changes the rows underneath. */
+function leadingShare(rows, target) {
+  const total = d3.sum(rows, (d) => d.count);
+  if (!total) return null;
+  const sorted = [...rows].sort((a, b) => b.count - a.count);
+  let run = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    run += sorted[i].count;
+    if (run / total >= target) {
+      return { n: i + 1, share: run / total, names: sorted.slice(0, i + 1).map((d) => d.name), rows: sorted.slice(0, i + 1) };
+    }
+  }
+  return { n: sorted.length, share: 1, names: sorted.map((d) => d.name), rows: sorted };
+}
+
+/* "A, B and C" - a list a reader can say out loud. */
+function listPhrase(names) {
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
 /* Categorical series palette, in the fixed order validated for colour-blind
@@ -123,7 +289,14 @@ function buildSectorColorScale(data) {
   const domain = Array.from(totals.keys()).sort(
     (a, b) => (totals.get(b) - totals.get(a)) || a.localeCompare(b)
   );
-  sectorColorScale = d3.scaleOrdinal(domain, seriesPalette());
+  // .unknown() matters more than it looks. By default an ordinal scale APPENDS an
+  // unrecognised name to its domain and hands it range[i % 8], so a chart passing
+  // names from a different vocabulary silently gets colours that have already been
+  // used - which is exactly what happened: the formality chart passes macro-sector
+  // names ("Retail", "Extractive") into a scale whose domain is sector names
+  // ("Trade", "Mining and quarrying"), and two bars came out the same red. A
+  // named fallback makes that visible instead of plausible.
+  sectorColorScale = d3.scaleOrdinal(domain, seriesPalette()).unknown(getCss("--muted"));
   return sectorColorScale;
 }
 
@@ -258,6 +431,19 @@ function drawDonut(containerId, data) {
     })
     .attr("height", 24)
     .attr("rx", 4);
+  // A donut has no spare plot area, so its note always goes to the list below.
+  const ann = annotationLayer(svg, containerId, { narrow: true });
+  if (data.length > 1) {
+    const sorted = [...data].sort((a, b) => b.count - a.count);
+    const total = d3.sum(sorted, (d) => d.count) || 1;
+    const lead = leadingShare(sorted, 0.5);
+    if (lead) {
+      ann.note({ text: `${listPhrase(lead.names)} ${lead.n > 1 ? "are" : "is"} ${formatPercent(lead.share)} of everything in view — ${lead.n} of ${sorted.length} sectors.` });
+    }
+    const smallest = sorted[sorted.length - 1];
+    ann.note({ text: `The smallest, ${smallest.name}, is ${formatPercent(smallest.count / total)}.` });
+  }
+  ann.done();
 }
 
 function drawCapitalTreemap(containerId, data, selectedRegion = "All") {
@@ -380,11 +566,16 @@ function drawCapitalTreemap(containerId, data, selectedRegion = "All") {
     const leaf = d3.select(this);
     const blockWidth = d.x1 - d.x0;
     const blockHeight = d.y1 - d.y0;
-    if (blockWidth < 70 || blockHeight < 42) return;
-    const fontSize = Math.max(10, Math.min(15, blockHeight / 6.5, blockWidth / 12));
+    // Below 11px a label is decoration, not information. Rather than shrink the
+    // text to fit the tile, the tile has to be big enough for readable text or
+    // it carries none - the tooltip and the table still name every one.
+    const MIN_FONT = 11;
+    if (blockWidth < 88 || blockHeight < 46) return;
+    const fontSize = Math.max(MIN_FONT, Math.min(15, blockHeight / 6.5, blockWidth / 12));
     const label = fitLabel(d.data.name, blockWidth - 16, fontSize);
     if (!label) return;
-    const sectorLabel = fitLabel(d.data.sector, blockWidth - 16, Math.max(9, fontSize - 1));
+    const subFont = Math.max(MIN_FONT, fontSize - 1);
+    const sectorLabel = fitLabel(d.data.sector, blockWidth - 16, subFont);
     const valueLabel = formatBirr(d.data.totalCapital);
     leaf.append("text")
       .attr("class", "treemap-label")
@@ -395,31 +586,49 @@ function drawCapitalTreemap(containerId, data, selectedRegion = "All") {
       .text(label)
       .append("title")
       .text(d.data.name);
-    if (blockHeight > 62 && blockWidth > 90) {
+    if (blockHeight > 66 && blockWidth > 100 && sectorLabel) {
       leaf.append("text")
         .attr("class", "treemap-value")
         .attr("clip-path", `url(#${d.clipId})`)
-        .style("font-size", `${Math.max(8, fontSize - 1)}px`)
+        .style("font-size", `${subFont}px`)
         .attr("x", 9)
-        .attr("y", 35)
+        .attr("y", 36)
         .text(sectorLabel);
     }
-    if (blockHeight > 82 && blockWidth > 112) {
+    if (blockHeight > 88 && blockWidth > 118) {
       leaf.append("text")
         .attr("class", "treemap-value")
         .attr("clip-path", `url(#${d.clipId})`)
-        .style("font-size", `${Math.max(8, fontSize - 1)}px`)
+        .style("font-size", `${subFont}px`)
         .attr("x", 9)
-        .attr("y", 51)
+        .attr("y", 54)
         .text(valueLabel);
     }
   });
 
-  svg.append("text")
-    .attr("class", "capital-explain")
-    .attr("x", margin.left + 2)
-    .attr("y", height - 8)
-    .text("All categories are shown; tile sizes use a compressed display scale so small capital pools remain visible.");
+  // One long line does not fit a phone, and the notes list below already says
+  // the same thing, so it is drawn only where there is room for it.
+  if (width >= 620) {
+    svg.append("text")
+      .attr("class", "capital-explain")
+      .attr("x", margin.left + 2)
+      .attr("y", height - 8)
+      .text("All categories are shown; tile sizes use a compressed display scale so small capital pools remain visible.");
+  }
+
+  // A mosaic has no empty space for a note, so this one goes to the list below.
+  // The figures are the true capital shares, not the compressed tile areas.
+  const ann = annotationLayer(svg, containerId, { narrow: true });
+  if (leafData.length > 1) {
+    const byCapital = [...leafData].sort((a, b) => b.data.totalCapital - a.data.totalCapital);
+    const top = byCapital[0];
+    const topThree = byCapital.slice(0, 3);
+    const threeShare = d3.sum(topThree, (d) => d.data.totalCapital) / totalCapital;
+    ann.note({ text: `${top.data.name} is the largest single pool: ${formatPercent(top.data.totalCapital / totalCapital)} of the capital in view.` });
+    ann.note({ text: `The three largest together are ${formatPercent(threeShare)} of it, out of ${leafData.length} categories.` });
+    ann.note({ text: "Tiles are drawn on a compressed scale so the small pools stay visible, so judge the shares from these figures rather than from tile area." });
+  }
+  ann.done();
 }
 
 function drawSectorShareComparison(containerId, regionA, regionB, sectors) {
@@ -427,7 +636,8 @@ function drawSectorShareComparison(containerId, regionA, regionB, sectors) {
   const height = 230;
   const svg = resizeSvg(container, height);
   const width = container.clientWidth || 760;
-  const margin = { top: 16, right: 28, bottom: 54, left: 126 };
+  const narrow = width < 620;
+  const margin = { top: 16, right: narrow ? 26 : 28, bottom: 54, left: narrow ? Math.min(96, Math.round(width * 0.3)) : 126 };
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;
   const color = (name) => sectorColor(name);
@@ -451,12 +661,15 @@ function drawSectorShareComparison(containerId, regionA, regionB, sectors) {
   g.append("g")
     .attr("class", "axis")
     .call(d3.axisLeft(y).tickSize(0))
-    .call((axis) => axis.select(".domain").remove());
+    .call((axis) => axis.select(".domain").remove())
+    .call((axis) => trimAxisLabels(axis, margin.left - 12));
 
   g.append("g")
     .attr("class", "axis")
     .attr("transform", `translate(0,${innerHeight})`)
-    .call(d3.axisBottom(x).ticks(width < 580 ? 4 : 5).tickFormat(formatPercent));
+    // "100.0%" at the right end hangs over the edge of a phone card; the decimal
+    // is not telling the reader anything on an axis that only ever runs 0 to 100.
+    .call(d3.axisBottom(x).ticks(narrow ? 3 : 5).tickFormat(narrow ? d3.format(".0%") : formatPercent));
 
   const rowGroups = g.selectAll(".share-row")
     .data(rows)
@@ -483,6 +696,24 @@ function drawSectorShareComparison(containerId, regionA, regionB, sectors) {
       </span>
     `).join("");
   }
+  // The comparison's point is the sector where the two mixes part company.
+  const ann = annotationLayer(svg, containerId, { narrow: true });
+  if (rows.length === 2) {
+    const a = new Map(rows[0].segments.map((d) => [d.sector, d.share]));
+    const b2 = new Map(rows[1].segments.map((d) => [d.sector, d.share]));
+    const gaps = sectors.map((name) => ({ name, gap: (a.get(name) || 0) - (b2.get(name) || 0) }))
+      .sort((p1, p2) => Math.abs(p2.gap) - Math.abs(p1.gap));
+    const top = gaps[0];
+    if (top && Math.abs(top.gap) > 0.005) {
+      const ahead = top.gap > 0 ? rows[0] : rows[1];
+      const behind = top.gap > 0 ? rows[1] : rows[0];
+      ann.note({ text: `${top.name} is where the two part company: `
+        + `${formatPercent(Math.max(a.get(top.name) || 0, b2.get(top.name) || 0))} of ${ahead.region} `
+        + `against ${formatPercent(Math.min(a.get(top.name) || 0, b2.get(top.name) || 0))} of ${behind.region}.` });
+    }
+  }
+  ann.done();
+
 }
 
 function drawTypeDifference(containerId, regionA, regionB) {
@@ -499,7 +730,15 @@ function drawTypeDifference(containerId, regionA, regionB) {
   const height = Math.max(360, rows.length * 48 + 58);
   const svg = resizeSvg(container, height);
   const width = container.clientWidth || 760;
-  const margin = { top: 24, right: 72, bottom: 42, left: width < 620 ? 150 : 220 };
+  // Same lesson as the drilldown: a gutter wide enough for a business type name
+  // leaves no plot on a phone. The names get trimmed to whatever fits instead.
+  const narrow = width < 620;
+  const margin = {
+    top: narrow ? 44 : 24,
+    right: narrow ? 46 : 72,
+    bottom: 42,
+    left: narrow ? Math.min(118, Math.round(width * 0.38)) : 220,
+  };
   const innerWidth = width - margin.left - margin.right;
   const innerHeight = height - margin.top - margin.bottom;
   const maxShare = d3.max(rows, (d) => Math.max(d.shareA, d.shareB)) || 0.01;
@@ -511,12 +750,13 @@ function drawTypeDifference(containerId, regionA, regionB) {
   g.append("g")
     .attr("class", "axis")
     .call(d3.axisLeft(y).tickSize(0))
-    .call((axis) => axis.select(".domain").remove());
+    .call((axis) => axis.select(".domain").remove())
+    .call((axis) => trimAxisLabels(axis, margin.left - 12));
 
   g.append("g")
     .attr("class", "axis")
     .attr("transform", `translate(0,${innerHeight})`)
-    .call(d3.axisBottom(x).ticks(width < 620 ? 4 : 6).tickFormat(formatPercent));
+    .call(d3.axisBottom(x).ticks(narrow ? 3 : 6).tickFormat(formatPercent));
 
   const pairs = rows.flatMap((row) => [
     { name: row.name, region: regionA.region, share: row.shareA, count: mapA.get(row.name) || 0, color: getCss("--green") },
@@ -546,12 +786,16 @@ function drawTypeDifference(containerId, regionA, regionB) {
     .style("fill", (d) => x(d.share) > innerWidth - 48 ? "#fffdf8" : null)
     .text((d) => formatPercent(d.share));
 
-  const legend = svg.append("g").attr("class", "inline-legend").attr("transform", `translate(${margin.left},14)`);
+  // Two fixed 170px legend columns ran off the right of a phone card, so they
+  // stack there instead of sitting side by side.
+  const legend = svg.append("g").attr("class", "inline-legend")
+    .attr("transform", `translate(${narrow ? 4 : margin.left},14)`);
   [
     { region: regionA.region, color: getCss("--green") },
     { region: regionB.region, color: getCss("--blue") },
   ].forEach((item, index) => {
-    const group = legend.append("g").attr("transform", `translate(${index * 170},0)`);
+    const group = legend.append("g")
+      .attr("transform", narrow ? `translate(0,${index * 17})` : `translate(${index * 170},0)`);
     group.append("rect").attr("width", 10).attr("height", 10).attr("y", -9).attr("fill", item.color);
     group.append("text")
       .attr("class", "bar-label")
@@ -565,7 +809,28 @@ function drawTypeDifference(containerId, regionA, regionB) {
     .attr("x", innerWidth)
     .attr("y", innerHeight + 36)
     .attr("text-anchor", "end")
-    .text("Share of each selected region's businesses");
+    .text(narrow ? "Share of each region" : "Share of each selected region's businesses");
+
+  // The point of a comparison is where the two differ most, so find that row
+  // and say which way it runs. Recomputed on every change of either region.
+  const ann = annotationLayer(g, containerId, { narrow: width < 620, plotWidth: innerWidth });
+  const widest = [...rows].sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))[0];
+  if (widest && Math.abs(widest.diff) > 0.005) {
+    const ahead = widest.diff > 0 ? regionA : regionB;
+    const behind = widest.diff > 0 ? regionB : regionA;
+    const hiShare = Math.max(widest.shareA, widest.shareB);
+    const rowY = y(widest.name);
+    ann.band({ x: -8, y: rowY - 4, width: innerWidth + 16, height: y.bandwidth() + 8 });
+    ann.note({
+      x: Math.min(x(hiShare) + 18, innerWidth - 8),
+      y: rowY + y.bandwidth() + 30,
+      maxWidth: Math.max(170, innerWidth * 0.46),
+      text: `${widest.name} is the widest gap: ${formatPercent(hiShare)} of ${ahead.region}`
+        + ` against ${formatPercent(Math.min(widest.shareA, widest.shareB))} of ${behind.region}.`,
+      to: { x: x(hiShare) * 0.55, y: rowY + y.bandwidth() / 2 },
+    });
+  }
+  ann.done();
 }
 
 function updateComparisonSummary(data, regionA, regionB) {
@@ -659,10 +924,31 @@ function renderLegalStructure(data) {
 
   const rows = statuses
     .filter((s) => s.name !== "Private")
-    .map((s) => ({ name: s.name, count: s.count }))
+    // Same plain-English names the ownership chart uses, so a reader meeting
+    // "One-person limited company" there does not meet "One Man Private Limited
+    // Company" here.
+    .map((s) => ({ name: ownerLabel(s.name), count: s.count }))
     .sort((a, b) => b.count - a.count);
 
-  drawHorizontalBars("legalStructureChart", rows, { left: window.innerWidth < 520 ? 150 : 210, color: getCss("--clay") });
+  drawHorizontalBars("legalStructureChart", rows, {
+    left: window.innerWidth < 520 ? 150 : 210,
+    color: getCss("--clay"),
+    // With sole proprietors taken out, how much of what remains is one form.
+    annotate: (ann, sc) => {
+      if (rows.length < 3) return;
+      const lead = leadingShare(rows, 0.5);
+      if (!lead || lead.n > 2) return;
+      const first = lead.rows[0];
+      ann.note({
+        x: Math.min(sc.x(first.count) + 16, sc.innerWidth - 10),
+        y: sc.y(first.name) + sc.y.bandwidth() + 28,
+        maxWidth: Math.max(160, sc.innerWidth * 0.46),
+        text: `Once sole proprietors are set aside, ${listPhrase(lead.names)} `
+          + `${lead.n > 1 ? "are" : "is"} still ${formatPercent(lead.share)} of what is left.`,
+        to: { x: sc.x(first.count) * 0.6, y: sc.y(first.name) + sc.y.bandwidth() / 2 },
+      });
+    },
+  });
 }
 
 /* Ties the three lenses (structure, geography, capital) together with figures
@@ -698,10 +984,14 @@ function renderSynthesis(data) {
 
 function drawFormality(containerId, rows) {
   const container = document.getElementById(containerId);
-  const height = Math.max(240, rows.length * 40 + 56);
+  // The annotation needs a row of its own under the axis; without it the note
+  // landed on the 40% and 60% tick labels.
+  const annRoom = (container.clientWidth || 720) < 620 ? 0 : 46;
+  const height = Math.max(240, rows.length * 40 + 56) + annRoom;
   const svg = resizeSvg(container, height);
   const width = container.clientWidth || 720;
-  const margin = { top: 12, right: 64, bottom: 34, left: 132 };
+  const narrow = width < 620;
+  const margin = { top: 12, right: narrow ? 52 : 64, bottom: 34 + annRoom, left: narrow ? Math.min(104, Math.round(width * 0.33)) : 132 };
   const iw = width - margin.left - margin.right;
   const ih = height - margin.top - margin.bottom;
   const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
@@ -710,10 +1000,11 @@ function drawFormality(containerId, rows) {
   const y = d3.scaleBand().domain(rows.map((d) => d.macroSector)).range([0, ih]).padding(0.34);
 
   g.append("g").attr("class", "axis").attr("transform", `translate(0,${ih})`)
-    .call(d3.axisBottom(x).ticks(5).tickFormat(d3.format(".0%")).tickSize(0))
+    .call(d3.axisBottom(x).ticks(narrow ? 3 : 5).tickFormat(d3.format(".0%")).tickSize(0))
     .call((s) => s.select(".domain").remove());
   g.append("g").attr("class", "axis").call(d3.axisLeft(y).tickSize(0))
-    .call((s) => s.select(".domain").remove());
+    .call((s) => s.select(".domain").remove())
+    .call((s) => trimAxisLabels(s, margin.left - 12));
 
   // Track behind each bar shows the remainder, so the reader sees a share of a
   // whole rather than a bare length.
@@ -729,7 +1020,13 @@ function drawFormality(containerId, rows) {
     .attr("width", (d) => Math.max(2, x(d.soleProprietorShare)))
     .attr("height", y.bandwidth())
     .attr("rx", 4)
-    .attr("fill", (d) => sectorColor(d.macroSector))
+    // One colour for every bar. This chart measures a single quantity - the share
+    // of a sector owned by one person - and the sector's name is already on the
+    // axis beside its bar, so colour was carrying no information. Seven hues also
+    // put the chart over the limit where a reader with colour-blindness can tell
+    // the categories apart (see docs/palette_validation.md): below about four
+    // categories colour can carry identity, above it the labels have to.
+    .attr("fill", getCss("--green"))
     .on("mousemove", (event, d) => {
       const list = d.statuses.slice(0, 5)
         .map((s) => `<div class="tt-row"><span>${s.name}</span><b>${formatNumber(s.count)}</b></div>`).join("");
@@ -747,6 +1044,22 @@ function drawFormality(containerId, rows) {
     .attr("y", (d) => y(d.macroSector) + y.bandwidth() / 2)
     .attr("dominant-baseline", "middle")
     .text((d) => formatPercent(d.soleProprietorShare));
+
+  // The spread is the finding, so name both ends of it and point at the low one.
+  const ann = annotationLayer(g, containerId, { narrow: width < 620, plotWidth: iw });
+  if (rows.length > 2) {
+    const byShare = [...rows].sort((a, b) => b.soleProprietorShare - a.soleProprietorShare);
+    const hi = byShare[0], lo = byShare[byShare.length - 1];
+    ann.note({
+      x: Math.min(x(lo.soleProprietorShare) + 40, iw - 10),
+      y: ih + 46,
+      maxWidth: Math.max(160, iw * 0.46),
+      text: `Sole ownership runs from ${formatPercent(hi.soleProprietorShare)} of ${hi.macroSector} `
+        + `down to ${formatPercent(lo.soleProprietorShare)} of ${lo.macroSector}.`,
+      to: { x: x(lo.soleProprietorShare) + 4, y: y(lo.macroSector) + y.bandwidth() / 2 },
+    });
+  }
+  ann.done();
 }
 
 /* Ownership and money, side by side.
@@ -901,6 +1214,18 @@ function drawLegalCapital(containerId, rows, scopeNoun) {
 
   // Each column is scaled to its own longest bar, so say so: a reader comparing
   // a count bar against the money bar beside it would be comparing nothing.
+  // One note, and it is the ratio the two columns exist to show.
+  const ann = annotationLayer(svg, containerId, { narrow: true });
+  const commonest = [...data].sort((a, b) => b.count - a.count)[0];
+  const richest = [...data].sort((a, b) => b.median - a.median)[0];
+  if (commonest && richest && commonest !== richest && commonest.median) {
+    ann.note({ text: `A typical ${ownerLabel(richest.name).toLowerCase()} registers `
+      + `${Math.round(richest.median / commonest.median)}x what a typical `
+      + `${ownerLabel(commonest.name).toLowerCase()} does, and there are `
+      + `${Math.round(commonest.count / richest.count)} times as many of the latter.` });
+  }
+  ann.done();
+
   if (narrow) {
     svg.append("text").attr("class", "own-foot")
       .attr("x", 0).attr("y", height - 14)
@@ -942,7 +1267,15 @@ function drawDrilldown({ chartId, crumbId, path, levels, onNavigate }) {
   const height = Math.max(288, rows.length * 32 + 52);
   const svg = resizeSvg(container, height);
   const width = container.clientWidth || 760;
-  const margin = { top: 10, right: 72, bottom: 30, left: 210 };
+  // A fixed 210px gutter left 46px of plot on a 328px card, and five tick labels
+  // stacked on top of each other underneath it. Both scale with the card now.
+  const narrow = width < 620;
+  const margin = {
+    top: 10,
+    right: narrow ? 46 : 72,
+    bottom: 30,
+    left: narrow ? Math.min(124, Math.round(width * 0.4)) : 210,
+  };
   const iw = width - margin.left - margin.right;
   const ih = height - margin.top - margin.bottom;
   const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
@@ -958,11 +1291,25 @@ function drawDrilldown({ chartId, crumbId, path, levels, onNavigate }) {
   const y = d3.scaleBand().domain(rows.map((d) => d.name)).range([0, ih]).padding(0.26);
 
   g.append("g").attr("class", "axis").attr("transform", `translate(0,${ih})`)
-    .call(d3.axisBottom(x).ticks(5, "~s").tickSize(0))
+    .call(d3.axisBottom(x).ticks(narrow ? 3 : 5, "~s").tickSize(0))
     .call((s) => s.select(".domain").remove());
   g.append("g").attr("class", "axis").call(d3.axisLeft(y).tickSize(0))
     .call((s) => s.select(".domain").remove())
-    .selectAll("text").text((t) => (t.length > 30 ? `${t.slice(0, 29)}…` : t));
+    .call((s) => trimAxisLabels(s, margin.left - 12));
+
+  // A note that follows the reader down the hierarchy: at every level it says how
+  // top-heavy that level is, which is the thing the drilldown is for.
+  const dAnn = annotationLayer(g, chartId, { narrow: true });
+  if (rows.length > 2) {
+    const lead = leadingShare(rows, 0.5);
+    const where = path.length ? path[path.length - 1] : "the whole register";
+    if (lead) {
+      dAnn.note({ text: `Inside ${where}, ${listPhrase(lead.names)} `
+        + `${lead.n > 1 ? "account" : "accounts"} for ${formatPercent(lead.share)} of the `
+        + `${rows.length} shown at this level.` });
+    }
+  }
+  dAnn.done();
 
   const canDrill = path.length < levels.length - 1;
 
@@ -1148,9 +1495,22 @@ function drawSectorRadar(containerId, rows) {
     });
   });
 
-  svg.append("text").attr("class", "ax")
+  svg.append("text").attr("class", "axis-title")
     .attr("x", cx).attr("y", height - 4).attr("text-anchor", "middle")
     .text(`outer ring = ${formatPercent(maxShare)}`);
+
+  // A radar cannot be read off precisely, so the note carries the one number
+  // worth taking away: the sector furthest from its own share of businesses.
+  // Forced to the list under the chart - this panel is never wide enough to
+  // place a note on the plot without landing it on a spoke.
+  const ann = annotationLayer(svg, containerId, { narrow: true });
+  const spread = [...rows].filter((d) => d.ratio).sort((a, b) => b.ratio - a.ratio);
+  if (spread.length > 1) {
+    const over = spread[0], under = spread[spread.length - 1];
+    ann.note({ text: `${over.sector} holds ${over.ratio.toFixed(1)}x as much of the capital as it does of the businesses — the widest gap of the eight.` });
+    ann.note({ text: `${under.sector} is the other end: ${under.ratio.toFixed(2)}x, so it carries less capital than its count of businesses suggests.` });
+  }
+  ann.done();
 }
 
 function radarTip(d) {
@@ -1181,7 +1541,8 @@ function attachDataTable(chartId, caption, columns, rows) {
     // so the note can refer to the figures as being below it.
     const parent = chart.parentElement;
     const note = parent ? parent.querySelector(":scope > .caveat") : null;
-    (note || chart).insertAdjacentElement("afterend", box);
+    const notes = document.getElementById(`${chartId}-notes`);
+    (note || notes || chart).insertAdjacentElement("afterend", box);
   }
   box.innerHTML = "";
 
@@ -1295,9 +1656,47 @@ function render(data) {
     const regionRows = regionChartData.slice(0, 14);
     const sectorRows = sectorChartData.slice(0, 8);
     const typeRows = typeData.slice(0, 10);
-    drawHorizontalBars("regionChart", regionRows, { left: window.innerWidth < 520 ? 112 : 150, color: getCss("--green") });
+    drawHorizontalBars("regionChart", regionRows, {
+      left: window.innerWidth < 520 ? 112 : 150,
+      color: getCss("--green"),
+      // How few regions it takes to get past half the register, banded and named.
+      annotate: (ann, s) => {
+        const lead = leadingShare(regionRows, 0.5);
+        if (!lead || lead.n > 4 || regionRows.length < 3) return;
+        const top = lead.rows[0], bottom = lead.rows[lead.n - 1];
+        const y0 = s.y(top.name || top.region) - 3;
+        const y1 = s.y(bottom.name || bottom.region) + s.y.bandwidth() + 3;
+        ann.band({ x: -8, y: y0, width: s.innerWidth + 16, height: y1 - y0 });
+        ann.note({
+          x: s.innerWidth * 0.42,
+          y: y1 + 34,
+          maxWidth: Math.max(150, s.innerWidth * 0.52),
+          text: `${listPhrase(lead.names)} hold ${formatPercent(lead.share)} of everything registered.`,
+          to: { x: s.x(bottom.count) * 0.55, y: y1 - 4 },
+        });
+      },
+    });
     drawDonut("sectorChart", sectorRows);
-    drawHorizontalBars("typeChart", typeRows, { left: 190, color: getCss("--blue") });
+    drawHorizontalBars("typeChart", typeRows, {
+      left: 190,
+      color: getCss("--blue"),
+      // The register's long tail: how far the commonest type sits above the next.
+      annotate: (ann, s) => {
+        if (typeRows.length < 3) return;
+        const sorted = [...typeRows].sort((a, b) => b.count - a.count);
+        const first = sorted[0], second = sorted[1];
+        if (!second || !second.count) return;
+        const times = first.count / second.count;
+        if (times < 1.25) return;
+        ann.note({
+          x: Math.min(s.x(first.count) + 14, s.innerWidth - 10),
+          y: s.y(first.name) + s.y.bandwidth() + 26,
+          maxWidth: Math.max(140, s.innerWidth * 0.5),
+          text: `${first.name} alone is ${times.toFixed(1)}x the next type on the list.`,
+          to: { x: s.x(first.count) * 0.6, y: s.y(first.name) + s.y.bandwidth() / 2 },
+        });
+      },
+    });
 
     attachDataTable("regionChart", "Registered businesses by region",
       ["Region", "Businesses"], regionRows.map((d) => [d.name || d.region, formatNumber(d.count)]));

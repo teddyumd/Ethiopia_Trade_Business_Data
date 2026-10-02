@@ -8,6 +8,9 @@
       name="description"
       content="An interactive portfolio visualization of Ethiopia business registry patterns by region, sector, and capital."
     />
+    <!-- Inline so the page makes no request for it. The browser's automatic
+         /favicon.ico probe was the only 404 the site produced. -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%23fdfcf7'/%3E%3Crect x='3' y='8' width='2.4' height='5' fill='%23007a5f'/%3E%3Crect x='6.8' y='5' width='2.4' height='8' fill='%23007a5f'/%3E%3Crect x='10.6' y='3' width='2.4' height='10' fill='%23b5701f'/%3E%3C/svg%3E" />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
@@ -74,7 +77,7 @@
             <div>
               <h2>Where Businesses Are Registered</h2>
               <p id="regionSubtitle">Every region in the registry, ranked by how many businesses are registered there.</p>
-              <p class="how-to-read">Bar length is a straight count. Watch the drop after the first two bars &mdash; Oromia and Addis Ababa hold two thirds of the registry between them, while Gambela has fewer than two hundred.</p>
+              <p class="how-to-read"><strong>Bar length is a straight count.</strong> The drop after the first two bars is the shape of the whole register; the note on the chart says how steep it is. By the bottom of the list a region is down to a few hundred businesses.</p>
               <p class="scope-note" id="regionScope"></p>
             </div>
           </div>
@@ -137,7 +140,7 @@
             <div>
               <h2>Who Owns These Businesses</h2>
               <p>What legal form these businesses take &mdash; individuals, or institutions.</p>
-              <p class="how-to-read">Each bar is the share of that sector registered as a sole proprietorship; the pale track behind it is the remainder. The gradient is the point: formality rises steadily with capital intensity, from retail kiosks at the top to mining at the bottom. Hover for the full breakdown of legal forms.</p>
+              <p class="how-to-read"><strong>Each bar is the share of a sector owned by one person.</strong> The pale track behind it is everything else &mdash; partnerships, companies, cooperatives. The slope down the list is the point: the less capital a sector needs, the more of it is one person with a trade licence. Hover a bar, or tab to it, for the full breakdown of legal forms.</p>
               <p class="scope-note" id="formalityScope"></p>
             </div>
           </div>
