@@ -605,15 +605,34 @@ select {
   opacity: 0.35;
 }
 
-.iqr {
-  stroke-width: 2;
-  stroke-linecap: round;
-  opacity: 0.5;
+/* Ownership and capital: two linear bars per row. The old version of this
+   chart put a median dot and an interquartile line on a log axis, which asked
+   the reader to decode three conventions before seeing the point. Two plain
+   bars on linear scales say it without instruction: the commonest way to
+   register is also the way that puts in the least money. */
+.own-head {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.median-dot {
-  stroke: var(--panel);
-  stroke-width: 2;
+.own-label {
+  fill: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.own-value {
+  fill: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.own-foot {
+  fill: var(--muted);
+  font-size: 11px;
 }
 
 .axis-note,

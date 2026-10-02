@@ -749,56 +749,170 @@ function drawFormality(containerId, rows) {
     .text((d) => formatPercent(d.soleProprietorShare));
 }
 
-function drawLegalCapital(containerId, rows) {
+/* Ownership and money, side by side.
+   Replaces an earlier log-scale dot plot. That chart asked the reader to decode a
+   logarithmic axis, a median dot, a percentile range and six pieces of legal
+   jargon before it said anything. Two linear bars say it directly - and linear is
+   what makes the point land, because the commonest form's money bar is almost
+   invisible next to its count bar. */
+
+const OWNER_LABEL = {
+  "Private": "One owner",
+  "Partnership": "Partnership",
+  "Private Limited Company": "Private limited company",
+  "Cooperatives Association": "Cooperative",
+  "Share Company": "Share company",
+  "One Man Private Limited Company": "One-person limited company",
+  "Public Enterprise": "State enterprise",
+  "Non Public Enterprise": "Non-state enterprise",
+  "Trade Sectoral Association": "Trade association",
+  "Commercial Representative": "Commercial representative",
+  // Two forms the registry left in Amharic. Escaped rather than pasted so the
+  // keys cannot be mangled by an editor or an encoding change, and checked
+  // codepoint by codepoint against the names in business_landscape.json.
+  // "non-governmental charitable organisation"
+  "\u1218\u1295\u130D\u1235\u1273\u12CA \u12EB\u120D\u1206\u1290 \u12E8\u1260\u130E \u12A0\u12F5\u122B\u130E\u1275 \u12F5\u122D\u1305\u1275": "Non-governmental charity",
+  // "foreign companies that won an international tender"
+  "\u12A2\u1295\u1270\u122D\u1293\u123D\u1293\u120D \u1328\u1228\u1273 \u12EB\u1238\u1290\u1349 \u12E8\u12CD\u132A \u1203\u1308\u122D \u12F5\u122D\u1305\u1276\u127D": "Foreign firm, international tender",
+};
+const ownerLabel = (n) => OWNER_LABEL[n] || n;
+
+function drawLegalCapital(containerId, rows, scopeNoun) {
   const container = document.getElementById(containerId);
-  const height = Math.max(230, rows.length * 44 + 60);
+  // Keep the forms that cover virtually the whole register. The long tail is a
+  // couple of hundred businesses whose capital runs to millions and would set a
+  // scale that flattens everything else; the caveat and the table carry them.
+  const MAIN = [
+    "Private", "Partnership", "Private Limited Company",
+    "Cooperatives Association", "Share Company", "One Man Private Limited Company",
+  ];
+  const data = MAIN.map((n) => rows.find((r) => r.name === n)).filter(Boolean);
+  if (!data.length) return;
+
+  // Shares are of everything in view, including the forms the chart omits, so
+  // the percentages still add up to the register the reader is looking at.
+  const shownTotal = d3.sum(rows, (d) => d.count) || 1;
+  const of = scopeNoun || "the businesses shown";
+  const width = container.clientWidth || 760;
+  const narrow = width < 620;
+  const maxCount = d3.max(data, (d) => d.count);
+  const maxCap = d3.max(data, (d) => d.median);
+  const bh = 16;
+
+  const rowH = narrow ? 132 : 54;
+  const height = data.length * rowH + (narrow ? 44 : 84);
   const svg = resizeSvg(container, height);
-  const width = container.clientWidth || 720;
-  const margin = { top: 12, right: 92, bottom: 40, left: 218 };
-  const iw = width - margin.left - margin.right;
-  const ih = height - margin.top - margin.bottom;
-  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
 
-  // Log scale: the span from a partnership to a share company is ~130x, which a
-  // linear axis flattens into a single spike.
-  const lo = Math.max(1000, d3.min(rows, (d) => d.p25 || d.median) || 1000);
-  const hi = d3.max(rows, (d) => d.p75 || d.median) || 1e6;
-  const x = d3.scaleLog().domain([lo * 0.6, hi * 1.4]).range([0, iw]).clamp(true);
-  const y = d3.scaleBand().domain(rows.map((d) => d.name)).range([0, ih]).padding(0.45);
+  // Measure the labels rather than guessing a gutter: "One-person limited
+  // company" overran a fixed 190px and lost its first letter, and the set of
+  // forms changes when the region filter narrows the register.
+  const probe = svg.append("g").attr("opacity", 0);
+  const widest = d3.max(data, (d) => {
+    const t = probe.append("text").attr("class", "own-label").text(ownerLabel(d.name));
+    const w = t.node().getComputedTextLength();
+    t.remove();
+    return w;
+  }) || 0;
+  probe.remove();
 
-  g.append("g").attr("class", "axis").attr("transform", `translate(0,${ih})`)
-    .call(d3.axisBottom(x).ticks(5, "~s").tickSize(0))
-    .call((s) => s.select(".domain").remove());
-  g.append("g").attr("class", "axis").call(d3.axisLeft(y).tickSize(0))
-    .call((s) => s.select(".domain").remove())
-    .selectAll("text").text((t) => (t.length > 28 ? `${t.slice(0, 27)}…` : t));
-  g.append("text").attr("class", "axis-note")
-    .attr("x", iw).attr("y", ih + 34).attr("text-anchor", "end")
-    .text("Registered capital (ETB, log scale)");
+  // Below ~620px two columns leave no room for either, so the row stacks: the
+  // owner's name on its own line, then each bar full width under its own words.
+  const labelW = narrow ? 0 : Math.min(width * 0.3, Math.max(140, widest + 18));
+  const gap = narrow ? 0 : 34;
+  const colW = narrow
+    ? Math.max(60, width - 8)
+    : Math.max(70, (width - labelW - gap - 16) / 2);
+  const xCount = labelW;
+  const xCap = narrow ? labelW : labelW + colW + gap;
 
-  const row = g.selectAll(".lrow").data(rows).join("g")
-    .attr("class", "lrow")
-    .attr("transform", (d) => `translate(0,${y(d.name) + y.bandwidth() / 2})`)
-    .on("mousemove", (event, d) => showTooltip(event,
-      `<strong>${d.name}</strong>` +
-      `<div class="tt-row"><span>Businesses</span><b>${formatNumber(d.count)}</b></div>` +
-      `<div class="tt-row"><span>Median capital</span><b>${formatNumber(d.median)} ETB</b></div>` +
-      `<div class="tt-row"><span>25th–75th pct</span><b>${formatNumber(d.p25)}–${formatNumber(d.p75)}</b></div>`))
-    .on("mouseleave", hideTooltip);
+  const wCount = (v) => (v / maxCount) * colW;
+  const wCap = (v) => (v / maxCap) * colW;
 
-  row.append("line").attr("class", "iqr")
-    .attr("x1", (d) => x(Math.max(lo * 0.6, d.p25 || d.median)))
-    .attr("x2", (d) => x(d.p75 || d.median))
-    .attr("stroke", (d, i) => getCss(`--series-${(i % 8) + 1}`));
+  if (!narrow) {
+    svg.append("text").attr("class", "own-head").attr("x", xCount).attr("y", 16)
+      .text("How many businesses");
+    svg.append("text").attr("class", "own-head").attr("x", xCap).attr("y", 16)
+      .text("Money a typical one registers");
+  }
 
-  row.append("circle").attr("class", "median-dot")
-    .attr("cx", (d) => x(d.median)).attr("r", 6)
-    .attr("fill", (d, i) => getCss(`--series-${(i % 8) + 1}`));
+  const g = svg.append("g").attr("transform", `translate(0,${narrow ? 8 : 30})`);
 
-  row.append("text").attr("class", "bar-label")
-    .attr("x", (d) => x(d.p75 || d.median) + 12)
-    .attr("dominant-baseline", "middle")
-    .text((d) => `${formatCompact(d.median).replace("G", "B")}`);
+  // Where each piece sits inside a row, so the two layouts share one draw pass.
+  // Stacked, the caption goes ABOVE its bar: below it, each caption sat nearer
+  // the next bar than its own and read as a label for the wrong one.
+  const yCountBar = (y) => y + (narrow ? 42 : 6);
+  const yCapBar = (y) => y + (narrow ? 88 : 6);
+  const caption = (yBar) => (narrow ? yBar - 6 : yBar + bh + 22);
+
+  data.forEach((d, i) => {
+    const y = i * rowH;
+    const share = formatPercent(d.count / shownTotal);
+
+    g.append("text").attr("class", "own-label")
+      .attr("x", narrow ? 0 : labelW - 14)
+      .attr("y", narrow ? y + 14 : y + bh + 2)
+      .attr("text-anchor", narrow ? "start" : "end")
+      .text(ownerLabel(d.name));
+
+    // how many
+    g.append("rect").attr("class", "track")
+      .attr("x", xCount).attr("y", yCountBar(y)).attr("width", colW).attr("height", bh).attr("rx", 3);
+    g.append("rect")
+      .attr("x", xCount).attr("y", yCountBar(y))
+      .attr("width", Math.max(1.5, wCount(d.count))).attr("height", bh).attr("rx", 3)
+      .attr("fill", getCss("--series-3"));
+    g.append("text").attr("class", "own-value")
+      .attr("x", xCount).attr("y", caption(yCountBar(y)))
+      .text(narrow
+        ? `${formatNumber(d.count)} businesses (${share})`
+        : `${formatNumber(d.count)}  (${share})`);
+
+    // how much
+    g.append("rect").attr("class", "track")
+      .attr("x", xCap).attr("y", yCapBar(y)).attr("width", colW).attr("height", bh).attr("rx", 3);
+    g.append("rect")
+      .attr("x", xCap).attr("y", yCapBar(y))
+      .attr("width", Math.max(1.5, wCap(d.median))).attr("height", bh).attr("rx", 3)
+      .attr("fill", getCss("--series-2"));
+    g.append("text").attr("class", "own-value")
+      .attr("x", xCap).attr("y", caption(yCapBar(y)))
+      .text(narrow
+        ? `${formatNumber(d.median)} birr for a typical one`
+        : `${formatNumber(d.median)} birr`);
+
+    // One focusable, described row rather than four separate tab stops.
+    g.append("rect")
+      .attr("x", 0).attr("y", y).attr("width", width).attr("height", rowH - 6)
+      .attr("fill", "transparent")
+      .attr("tabindex", 0)
+      .attr("role", "img")
+      .attr("aria-label",
+        `${ownerLabel(d.name)}: ${formatNumber(d.count)} businesses, ` +
+        `${share} of ${of}. ` +
+        `A typical one registers ${formatNumber(d.median)} birr.`)
+      .on("mousemove focus", (event) => showTooltip(event,
+        `<strong>${ownerLabel(d.name)}</strong>` +
+        `<div class="tt-row"><span>Businesses</span><b>${formatNumber(d.count)}</b></div>` +
+        `<div class="tt-row"><span>Share</span><b>${share}</b></div>` +
+        `<div class="tt-row"><span>Typical capital</span><b>${formatNumber(d.median)} birr</b></div>` +
+        `<div class="tt-row"><span>Middle half range</span><b>${formatNumber(d.p25)}&ndash;${formatNumber(d.p75)}</b></div>`))
+      .on("mouseleave blur", hideTooltip);
+  });
+
+  // Each column is scaled to its own longest bar, so say so: a reader comparing
+  // a count bar against the money bar beside it would be comparing nothing.
+  if (narrow) {
+    svg.append("text").attr("class", "own-foot")
+      .attr("x", 0).attr("y", height - 14)
+      .text(`Full bars: ${formatNumber(maxCount)} businesses, ${formatNumber(maxCap)} birr`);
+  } else {
+    svg.append("text").attr("class", "own-foot")
+      .attr("x", xCount).attr("y", height - 14)
+      .text(`Full width = ${formatNumber(maxCount)} businesses`);
+    svg.append("text").attr("class", "own-foot")
+      .attr("x", xCap).attr("y", height - 14)
+      .text(`Full width = ${formatNumber(maxCap)} birr`);
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -945,9 +1059,9 @@ function setScopeNotes(region, sector, active) {
     : "";
   put("formalityScope", formalityNote + sectorCaveat);
   put("legalCapitalScope", (inRegion
-    ? `Capital by legal form in ${region}.`
-    : "Capital by legal form across the whole registry.")
-    + (inSector ? " Not broken down by sector." : ""));
+    ? `Businesses registered in ${region}.`
+    : "Every business in the register.")
+    + (inSector ? " This chart is not split by sector, so the sector filter does not apply." : ""));
 
   put("capitalShareScope", "Computed across the whole register — neither filter narrows this comparison, so the two shares stay on the same base.");
 
@@ -1280,13 +1394,21 @@ function render(data) {
     const f = formalityRows();
     const l = legalCapitalRows();
     drawFormality("formalityChart", f);
-    drawLegalCapital("legalCapitalChart", l);
+    // Under a region filter the percentages are of that region, not the country,
+    // so the spoken description has to say which.
+    const lScope = regionSelect.value !== "All"
+      ? `businesses registered in ${regionSelect.value}`
+      : "the whole register";
+    drawLegalCapital("legalCapitalChart", l, lScope);
     attachDataTable("formalityChart", "Legal structure by sector",
       ["Sector", "Businesses", "Sole proprietor"],
       f.map((d) => [d.macroSector, formatNumber(d.count), formatPercent(d.soleProprietorShare)]));
-    attachDataTable("legalCapitalChart", "Registered capital by legal form",
-      ["Legal form", "Businesses", "25th pct", "Median", "75th pct"],
-      l.map((d) => [d.name, formatNumber(d.count), formatNumber(d.p25), formatNumber(d.median), formatNumber(d.p75)]));
+    // Every form, including the handful the chart leaves out, and the lower and
+    // upper quarters alongside the typical figure the bars show.
+    attachDataTable("legalCapitalChart", "Every kind of owner, and the money they register",
+      ["Kind of owner", "Businesses", "Lower quarter below", "Typical", "Upper quarter above"],
+      l.map((d) => [ownerLabel(d.name), formatNumber(d.count),
+        formatNumber(d.p25), formatNumber(d.median), formatNumber(d.p75)]));
   }
   drawFormalityViews();
 
