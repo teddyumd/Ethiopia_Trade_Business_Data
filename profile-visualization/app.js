@@ -967,18 +967,11 @@ function renderSynthesis(data) {
   const topRegion = (data.topRegions || [])[0];
   const topRegionShare = topRegion ? topRegion.count / data.summary.totalBusinesses : 0;
 
-  const capitalGap = data.capitalSummary && data.capitalSummary.mean && data.capitalSummary.median
-    ? data.capitalSummary.mean / data.capitalSummary.median
-    : null;
-
   document.getElementById("synthTotal").textContent = formatNumber(data.summary.totalBusinesses);
   document.getElementById("synthPrivateShare").textContent = formatPercent(privateShare);
   if (topRegion) {
     document.getElementById("synthTopRegionLabel").textContent = `Based in ${topRegion.name} alone`;
     document.getElementById("synthTopRegionShare").textContent = formatPercent(topRegionShare);
-  }
-  if (capitalGap !== null) {
-    document.getElementById("synthCapitalGap").textContent = `${Math.round(capitalGap)}×`;
   }
 }
 
