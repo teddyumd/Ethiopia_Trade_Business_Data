@@ -117,18 +117,6 @@ h2 {
   font-size: 1.08rem;
 }
 
-.method-note {
-  border-left: 4px solid var(--green);
-  padding: 14px 0 14px 18px;
-  color: var(--muted);
-  line-height: 1.5;
-}
-
-.method-note strong {
-  display: block;
-  color: var(--ink);
-}
-
 .stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
