@@ -36,7 +36,7 @@ This avoids a backend, database, React framework, cloud warehouse, or dashboard 
 
 Current root folder:
 
-`C:\Users\teddy\Projects\Ethiopia_Trade_Business_Data`
+`<project-root>`
 
 Important folders and files:
 

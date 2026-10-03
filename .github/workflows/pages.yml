@@ -1,0 +1,54 @@
+# Publishes profile-visualization/ to GitHub Pages.
+#
+# A workflow rather than Pages' built-in branch setting, because that setting can
+# only serve a repository's root or its /docs folder - and /docs here holds the
+# written documentation, not the site. This deploys the site's own folder without
+# moving anything or keeping a duplicate copy on a second branch.
+name: Deploy visualization to Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "profile-visualization/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it; a half-deployed site is
+# worse than a slightly stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The site is plain HTML, CSS and vendored d3 - no build step, nothing to
+      # install. Fail loudly if the files the page needs are missing, rather than
+      # publishing a page that loads to a blank panel.
+      - name: Check the site is complete
+        run: |
+          cd profile-visualization
+          for f in index.html app.js styles.css d3.min.js data/business_landscape.json; do
+            test -s "$f" || { echo "missing or empty: $f"; exit 1; }
+          done
+          node --check app.js
+          echo "all assets present, app.js parses"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: profile-visualization
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -3,6 +3,8 @@
 An analysis of Ethiopia's 2016 commercial register — 345,369 businesses — delivered as an
 interactive visualization and a written report.
 
+**[View the live visualization →](https://teddyumd.github.io/Ethiopia_Trade_Business_Data/)**
+
 The headline finding is not that most Ethiopian businesses are one person, though 85.4% of
 them are. It is that informality is **not a flat national condition**. It falls steadily as
 capital requirements rise:
@@ -89,3 +91,14 @@ colour-blind separation rather than chosen by eye.
 - `d3.min.js` is vendored rather than loaded from a CDN, so the site runs offline and pins its
   version. It is committed; the site does not render without it.
 - Large source files are excluded from Git by `.gitignore` and are kept alongside the repo.
+- The site is published from `profile-visualization/` by `.github/workflows/pages.yml`, which
+  checks every asset is present and that `app.js` parses before it deploys.
+
+## Licence
+
+The code, scripts and written analysis in this repository are MIT licensed — see `LICENSE`.
+
+That covers my work, not the underlying data. The commercial register is Ethiopian government
+data and is not mine to relicense; the raw files are excluded from this repository, and the
+only data published here is the aggregated `business_landscape.json`. Anyone reusing the
+figures should attribute the register itself, not this repository.
